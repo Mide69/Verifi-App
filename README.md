@@ -2,7 +2,7 @@
 
 A local demo for trying consumer product checks, manufacturer onboarding and pack labelling, regulator surveillance, and Verifi operations.
 
-## Run v2 on Windows
+## Run on Windows
 
 If v1 is running, stop it with Ctrl+C in its PowerShell window. Extract this ZIP into a new folder, open PowerShell in the extracted folder (the one containing package.json), and run:
 
@@ -11,7 +11,7 @@ npm.cmd ci
 npm.cmd start
 ```
 
-Open http://localhost:3000 in your browser. The header reads **DEMO DATA · V2**. If the previous screen is still displayed, press Ctrl+F5. Browser data from the previous version is retained when using the same localhost address. Press Ctrl+C in PowerShell to stop the server. Run `npm.cmd test` to check the verification and case-grouping rules.
+Open http://localhost:3000 in your browser. The header reads **DEMO DATA · V3**. If the previous screen is still displayed, press Ctrl+F5. Browser data from the previous version is retained when using the same localhost address. Press Ctrl+C in PowerShell to stop the server. Run `npm.cmd test` to check the verification and case-grouping rules.
 
 ## Walk through the pilot
 
