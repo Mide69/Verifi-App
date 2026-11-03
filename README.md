@@ -11,7 +11,7 @@ npm.cmd ci
 npm.cmd start
 ```
 
-Open http://localhost:3000 in your browser. The header reads **DEMO DATA · V3**. If the previous screen is still displayed, press Ctrl+F5. Browser data from the previous version is retained when using the same localhost address. Press Ctrl+C in PowerShell to stop the server. Run `npm.cmd test` to check the verification and case-grouping rules.
+Open http://localhost:3000 in your browser. The header reads **DEMO DATA · V4**. If the previous screen is still displayed, press Ctrl+F5. Browser data from the previous version is retained when using the same localhost address. Press Ctrl+C in PowerShell to stop the server. Run `npm.cmd test` to check the verification and case-grouping rules.
 
 ## Walk through the pilot
 

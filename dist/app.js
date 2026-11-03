@@ -10,6 +10,17 @@ let result, lastCode, stream, openingCamera, noticeTimer
 const view = document.querySelector('#view')
 const nav = document.querySelector('#nav')
 const pages = { Consumer: ['Scan','Catalogue','Community','History'], Company: ['Overview','Products','Batches','Onboarding'], Regulator: ['Overview','Cases'], Operator: ['Overview','Approvals','Cases'] }
+const workspaces = {
+  Consumer: ['Scan', 'Check a product'],
+  Company: ['Onboarding', 'Manage your products'],
+  Regulator: ['Cases', 'Review referred cases'],
+  Operator: ['Approvals', 'Manage the pilot']
+}
+const workspaceNav = document.querySelector('#workspaces')
+workspaceNav.innerHTML = '<div class="nav-label">DEMO WORKSPACES</div>' +
+  Object.entries(workspaces).map(([name, [symbol, description]]) =>
+    `<button data-role="${name}" aria-controls="view"><span class="workspace-icon">${icon(symbol)}</span><span class="workspace-copy"><strong>${name}</strong><small>${description}</small></span></button>`
+  ).join('')
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))
 const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')
 const save = () => localStorage.setItem(key, JSON.stringify(data))
@@ -36,14 +47,14 @@ function notify(message) {
 }
 
 function scanResult() {
-  if (!result) return blank('Scan','Waiting for a code','Scan a pack or enter a code to see the verification result here.')
+  if (!result) return blank('Scan','Ready when you are','Scan a pack or enter a code to see the verification result here.') + `<div class="result-guide"><h3>What you’ll see</h3><div><span class="result-dot"></span><span><b>Pack match</b><small>Whether the serial matches a sample record.</small></span></div><div><span class="result-dot amber-dot"></span><span><b>Registration details</b><small>Which product and authority the code points to.</small></span></div><div><span class="result-dot red-dot"></span><span><b>Safety notices</b><small>Expiry, recalls or unusual scan activity.</small></span></div></div>`
   const { product, batch } = result
   return `<div class="status ${result.tone}">${result.title}</div><p>${result.detail}</p>${product ? `<div class="result-product">${art(product.id,'mini')}<div><small>PRODUCT RECORD</small><h3>${escape(product.name)}</h3></div></div><dl>${Object.entries({'Registration': product.agency + ' · ' + product.registration, 'Pack size': product.size, 'Batch': batch?.lot, 'Manufactured': batch?.made, 'Expiry': batch?.expires, 'Ingredients': product.ingredients, 'Allergens': product.allergens, 'Storage': product.storage}).filter(([, value]) => value).map(([label, value]) => `<dt>${label}</dt><dd>${escape(value)}</dd>`).join('')}</dl>` : ''}<button data-action="report">Report this pack</button>`
 }
 
 function consumer() {
   if (!profile) return launch + `<section class="panel access" id="demo-access"><div><div class="eyebrow">TRY THE PILOT</div><h2>Start a demo session</h2><p class="muted">Explore verification with sample products. Your activity is saved in this browser.</p></div><div>${form('signin',select('Demo sign-in method','method',options(['Google','Email','Phone'])) + field('Demo name or identifier','name','required maxlength="60" value="Demo shopper"'),'Start demo session')}<p class="muted">Use sample details only. No external sign-in or verification codes are sent.</p></div></section>` + metrics([['Demo shoppers',data.profiles?.length || 0],['Approved companies',data.companies.filter(c=>c.status==='Approved').length],['Catalogue products',data.products.length],['Product checks',data.scans.length],['Confirmed cases',clusters(data).filter(g=>caseStatus(g)==='Confirmed').length]])
-  if (page === 'Scan') return heading('PRODUCT CHECK','Check a product','Scan a supported code or enter a pack serial or registration number.') + `<div class="split scan-grid"><section class="panel scanner"><div class="scan-stage"><div class="scan-target" aria-hidden="true"><i></i><i></i><i></i><i></i><span></span></div><video hidden id="camera" playsinline muted></video><small>PACK VERIFICATION</small></div><h2>Scan or enter a code</h2><p class="muted">You can optionally add the state and LGA where you scanned the pack.</p>${form('scan',field('Product code','code',`required maxlength="180" placeholder="e.g. VF-DEMO-001" value="${escape(lastCode)}"`) + `<div class="pair">${geo}</div>`,'Check product')}<div class="actions"><button data-action="camera">Use camera</button><button data-action="sample">Try sample code</button></div></section><section class="panel result-panel"><h2>Verification result</h2>${scanResult()}</section></div><section class="panel" id="report" hidden><h2>Report a suspicious pack</h2>${form('report-form',`<p class="muted">Enter where you bought or found the pack.</p><div class="pair">${geo}</div>` + field('What did you notice?','reason','required maxlength="500"') + field('Sample photo (optional)','photo','type="file" accept="image/jpeg,image/png,image/webp"'),'Submit private report')}</section>`
+  if (page === 'Scan') return heading('PRODUCT CHECK','Check a product','Scan a supported code or enter a pack serial or registration number.') + `<div class="split scan-grid"><section class="panel scanner"><div class="scan-stage"><div class="scan-target" aria-hidden="true"><i></i><i></i><i></i><i></i><span></span></div><video hidden id="camera" playsinline muted></video><small>ALIGN THE PACK CODE</small></div><div class="scanner-tools"><button data-action="camera" class="primary">Use camera</button><button data-action="sample">Try sample code</button></div><div class="manual"><div class="eyebrow">MANUAL LOOKUP</div><h2>Enter a code</h2><p class="muted">You can optionally add the state and LGA where you scanned the pack.</p>${form('scan',field('Product code','code',`required maxlength="180" placeholder="e.g. VF-DEMO-001" value="${escape(lastCode)}"`) + `<div class="pair">${geo}</div>`,'Check product')}</div></section><section class="panel result-panel"><div class="result-heading"><div><div class="eyebrow">VERIFICATION</div><h2>Check result</h2></div><span class="workspace-icon">${icon('Approvals')}</span></div>${scanResult()}</section></div><section class="panel" id="report" hidden><h2>Report a suspicious pack</h2>${form('report-form',`<p class="muted">Enter where you bought or found the pack.</p><div class="pair">${geo}</div>` + field('What did you notice?','reason','required maxlength="500"') + field('Sample photo (optional)','photo','type="file" accept="image/jpeg,image/png,image/webp"'),'Submit private report')}</section>`
   if (page === 'History') {
     const scans = data.scans.filter(item => item.author === profile)
     const reports = data.reports.filter(item => item.author === profile)
@@ -73,7 +84,7 @@ function oversight() {
   const groups = clusters(data).filter(g=>isOperator || (g.agency === agency && ['Referred','Confirmed'].includes(caseStatus(g))))
   if (page === 'Approvals') return heading('VERIFI OPERATIONS','Company approvals','Review sample evidence and approve or reject access.') + `<section class="panel approvals-panel"><h2>Application queue</h2>${table(['Company','Registration','Address and evidence','Status','Decision'],data.companies.map(c=>[escape(c.name),escape(c.registration),escape([c.address,c.reference].filter(Boolean).join(' · ')),`<span class="badge approval-${c.status.toLowerCase()}">${escape(c.status)}</span>`, c.status === 'Pending' ? `<button data-approve="${escape(c.id)}">Approve</button> <button data-reject="${escape(c.id)}">Reject</button>` : 'Reviewed']))}</section>`
   const scope = isOperator ? '' : select('Demo regulator','agency',options(['NAFDAC','SON']))
-  if (page === 'Cases') return heading('MARKET SURVEILLANCE','Investigation cases','Review location clusters and keep suspected activity separate from confirmed cases.') + `<section class="panel cases-panel"><div class="case-toolbar"><h2>Case queue</h2><button data-action="export-cases">Export case summary</button></div>${scope}<div class="pair">${field('Filter by product or location','case-search','type="search"')}${field('Report date','case-date','type="date"')}</div><div id="cases">${groups.length ? groups.map((g,i)=>`<article data-case-row data-date="${g.date}"><div class="case-head"><div><small>${escape(g.agency || 'Unassigned')} · ${g.date}</small><h3>${escape(productName(g.product))}</h3><p>${escape(g.lga)}, ${escape(g.state)} · ${g.people.size} distinct reporter(s) · ${g.reports.length} report(s)</p></div><span class="badge">${escape(caseStatus(g))}</span></div><details><summary>View report evidence</summary>${g.reports.map(r=>`<p>${escape(r.reason)}${r.photo ? `<br><img class="evidence" alt="Sample report evidence" src="${escape(r.photo)}">` : ''}</p>`).join('')}</details><div class="actions">${isOperator ? `<button data-case="${i}" data-status="Under review">Review</button><button data-case="${i}" data-status="Referred">Refer to ${escape(g.agency || 'agency')}</button>` : ''}<button data-case="${i}" data-status="Confirmed">Mark confirmed</button></div></article>`).join('') : blank('Cases','No cases in this workspace','Referred investigations will appear here when available.')}</div></section>`
+  if (page === 'Cases') return heading('MARKET SURVEILLANCE','Investigation cases','Review location clusters and keep suspected activity separate from confirmed cases.') + `<section class="panel cases-panel"><div class="case-toolbar"><h2>Case queue</h2><button data-action="export-cases">Export case summary</button></div>${scope}<div class="pair">${field('Filter by product or location','case-search','type="search"')}${field('Report date','case-date','type="date"')}</div><div id="cases">${groups.length ? groups.map((g,i)=>`<article data-case-row data-date="${g.date}"><div class="case-head"><div><small>${escape(g.agency || 'Unassigned')} · ${g.date}</small><h3>${escape(productName(g.product))}</h3><p>${escape(g.lga)}, ${escape(g.state)}</p></div><span class="badge">${escape(caseStatus(g))}</span></div><div class="case-counts"><div><strong>${g.people.size}</strong><span>Distinct reporters</span></div><div><strong>${g.reports.length}</strong><span>Reports</span></div></div><details><summary>View report evidence</summary>${g.reports.map(r=>`<p>${escape(r.reason)}${r.photo ? `<br><img class="evidence" alt="Sample report evidence" src="${escape(r.photo)}">` : ''}</p>`).join('')}</details><div class="actions">${isOperator ? `<button data-case="${i}" data-status="Under review">Review</button><button data-case="${i}" data-status="Referred">Refer to ${escape(g.agency || 'agency')}</button>` : ''}<button data-case="${i}" data-status="Confirmed">Mark confirmed</button></div></article>`).join('') : blank('Cases','No cases in this workspace','Referred investigations will appear here when available.')}</div></section>`
   const products = data.products.filter(p=>isOperator || p.agency===agency)
   const scans = data.scans.filter(s=>isOperator || products.some(p=>p.id===s.product))
   return heading('MARKET SURVEILLANCE',isOperator ? 'Verifi operations' : agency + ' overview','Monitor demo activity and investigate emerging product risks.') + (scope ? `<section class="panel">${scope}</section>` : '') + metrics([['Products',products.length],['Scans',scans.length],['Case groups',groups.length],['Confirmed cases',groups.filter(g=>caseStatus(g)==='Confirmed').length]]) + (isOperator ? metrics([['Demo shoppers',data.profiles?.length || 0],['Approved companies',data.companies.filter(c=>c.status==='Approved').length]]) : '') + `<div class="split">${activityChart(scans)}${caseChart(groups,caseStatus)}</div>` + `<section class="panel"><h2>Recent checks</h2>${recent(scans)}</section>`
@@ -85,7 +96,12 @@ function stopCamera() {
 }
 function render() {
   stopCamera()
-  document.querySelector('#crumb').textContent = role + ' / ' + page
+  document.querySelector('#crumb').innerHTML = `<span>${role}</span><span aria-hidden="true">/</span><strong>${page}</strong>`
+  document.querySelector('#section-label').textContent = role.toUpperCase() + ' TOOLS'
+  for (const button of workspaceNav.querySelectorAll('[data-role]')) {
+    if (button.dataset.role === role) button.setAttribute('aria-current', 'true')
+    else button.removeAttribute('aria-current')
+  }
   nav.innerHTML = pages[role].map(p=>`<button data-page="${p}" ${page===p?'aria-current="page"':''}>${icon(p)}<span>${p}</span></button>`).join('')
   view.dataset.page = page.toLowerCase()
   view.dataset.role = role.toLowerCase()
@@ -148,16 +164,26 @@ async function camera() {
   finally { openingCamera = false }
 }
 
-document.querySelector('#role').addEventListener('change',event=>{
-  role=event.target.value
-  page=pages[role][0]
-  render()
-})
 document.addEventListener('click',event=>{
   const button=event.target.closest('button')
   if (!button) return
   const d=button.dataset
-  if (d.page) { page=d.page; render(); return }
+  if (d.role && d.role !== role) {
+    role = d.role
+    page = pages[role][0]
+    render()
+    window.scrollTo(0, 0)
+    return
+  }
+  if (d.page) {
+    page = d.page
+    render()
+    window.scrollTo(0, 0)
+    if (!button.isConnected) {
+      nav.querySelector('[aria-current="page"]').focus({preventScroll:true})
+    }
+    return
+  }
   if (d.action==='sample') view.querySelector('[name="code"]').value='VF-DEMO-001'
   if (d.action==='camera') camera()
   if (d.action==='report') { const report=view.querySelector('#report'); report.hidden=false; report.scrollIntoView({block:'nearest'}); report.querySelector('input').focus() }
