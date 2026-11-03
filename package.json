@@ -1,31 +1,23 @@
 {
-  "name": "larder",
-  "version": "1.0.0",
-  "main": "index.ts",
-  "dependencies": {
-    "@expo/metro-runtime": "~56.0.15",
-    "@expo/vector-icons": "^15.0.2",
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~56.0.12",
-    "expo-camera": "~56.0.8",
-    "expo-device": "~56.0.4",
-    "expo-linear-gradient": "~56.0.4",
-    "expo-notifications": "~56.0.18",
-    "expo-status-bar": "~56.0.4",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-native": "0.85.3",
-    "react-native-web": "^0.21.2"
-  },
-  "devDependencies": {
-    "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+  "name": "verifi",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "node server.js",
+    "test": "node --test",
+    "build": "esbuild public/app.js --bundle --format=esm --minify --outfile=public/app.bundle.js",
+    "prestart": "npm run build",
+    "pretest": "npm run build"
   },
-  "private": true
+  "dependencies": {
+    "@zxing/browser": "^0.2.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
 }

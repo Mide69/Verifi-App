@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f6f5f1">
+  <title>Verifi | Product checks for Nigeria</title>
+  <link rel="icon" href="/icon.svg"><link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top"><div class="wrap top-inner">
+    <a class="brand" href="/"><img src="/icon.svg" width="34" height="34" alt="">Verifi<span>.</span></a>
+    <nav aria-label="Main navigation"><a href="#check">Check</a><a href="#explore">Explore</a><a href="#history">History</a></nav>
+    <a class="workspace-link" href="#workspace">Workspace <span aria-hidden="true">↗</span></a>
+  </div></header>
+  <main id="main" class="wrap">
+    <section id="check" class="hero">
+      <div class="intro">
+        <p class="eyebrow"><span class="dot"></span> PRODUCT CHECKS FOR NIGERIA</p>
+        <h1>Know what<br>you’re buying<span>.</span></h1>
+        <p class="lede">Scan a pack or look up a product before you buy. See what its registration and item code can tell you.</p>
+        <div class="demo"><span>PILOT</span> Sample records are labelled in results.</div>
+      </div>
+      <div class="check-card">
+        <div class="card-title"><span class="tile-icon" aria-hidden="true">⌗</span><div><h2>Check a product</h2><p>Barcode, item code or registration number</p></div></div>
+        <div class="scan-illustration" aria-hidden="true"><div class="target"><i></i><i></i><i></i><i></i><svg width="121" height="55" viewBox="0 0 121 55" fill="currentColor"><path d="M0 0h3v55H0zM7 0h2v55H7zM13 0h6v55h-6zM24 0h3v55h-3zM31 0h2v55h-2zM36 0h5v55h-5zM46 0h2v55h-2zM53 0h7v55h-7zM64 0h3v55h-3zM72 0h2v55h-2zM78 0h6v55h-6zM89 0h3v55h-3zM97 0h5v55h-5zM106 0h2v55h-2zM113 0h7v55h-7z"/></svg></div></div>
+        <video id="camera" playsinline muted hidden></video>
+        <button id="scan" class="primary full" type="button">Open camera <span aria-hidden="true">↗</span></button>
+        <form id="check-form"><label for="query">Or enter a name or code</label><div class="input-row"><input id="query" name="value" placeholder="e.g. DEMO-1204" maxlength="160" required><button type="submit">Check</button></div></form>
+        <p id="check-status" role="status"></p>
+      </div>
+    </section>
+    <section id="result" class="panel result" aria-live="polite" hidden></section>
+    <div class="quick-links">
+      <a href="#explore"><span>01</span><div><strong>Explore products</strong><small>Browse the catalogue and community reviews</small></div><b aria-hidden="true">↗</b></a>
+      <a href="#report"><span>02</span><div><strong>Report a concern</strong><small>Share details of a suspected counterfeit</small></div><b aria-hidden="true">↗</b></a>
+    </div>
+    <section id="explore" class="panel"><p class="eyebrow">COMMUNITY</p><h2>Explore products</h2><div id="catalogue"></div></section>
+    <section id="report" class="panel"><p class="eyebrow">PRODUCT SAFETY</p><h2>Report a concern</h2><p>Include the batch number and where you found the product if you know them.</p>
+      <form id="report-form"><label>Product name or code<input name="product" maxlength="160" required></label><label>What did you notice?<textarea name="detail" maxlength="2000" required></textarea></label><button id="location" type="button">Add current location (optional)</button> <button class="primary">Submit report</button><p id="report-status" role="status"></p></form>
+    </section>
+    <section id="history" class="panel"><p class="eyebrow">ON THIS DEVICE</p><h2>Recent checks</h2><div id="recent"></div></section>
+    <section id="workspace" class="panel"><p class="eyebrow">OPERATIONS</p><h2>Workspace</h2><div id="workspace-content"></div><p id="workspace-status" role="status"></p></section>
+  </main>
+  <footer class="wrap"><strong>Verifi.</strong><span>Product verification pilot · Nigeria</span></footer>
+</body>
+</html>
