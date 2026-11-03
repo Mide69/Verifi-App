@@ -1,86 +1,23 @@
-# Larder — never let food expire again
+# Verifi
 
-**Larder** helps people track the expiry dates of their food and groceries. Scan a
-barcode, confirm the name, set the expiry date, and Larder reminds you before it
-goes off — with a notification and a sound. Built for everyone, with special care
-for older people and those who rely on a carer or family member.
+Verifi is a Nigeria-first product verification pilot for packaged food and drinks. It separates regulatory registration from evidence about an individual pack. A recognised serial can be copied, and an unknown code is inconclusive.
 
-> One codebase, three platforms: **iOS, Android, and Web** (Expo + React Native Web).
+## Run locally
 
-## Why it matters (UK)
+Requires Node.js 24 or newer.
 
-- UK households throw away around **£700 of edible food every year** (WRAP). Larder
-  nudges you to use food before it spoils — saving money and cutting waste.
-- **Care angle:** a shared store lets a family member or carer watch over someone's
-  kitchen and get the same expiry alerts — ideal for elderly or vulnerable people
-  living independently. That carer/provider tier is the commercial differentiator.
-
-## How the scan flow really works
-
-A barcode identifies *what* a product is — it does **not** contain the expiry date
-(that's printed per-batch on the packaging). So Larder does two things:
-
-1. **Scan the barcode** → look up the product name/brand/image from
-   [Open Food Facts](https://world.openfoodfacts.org) (free, open, great UK coverage).
-2. **Capture the expiry** → quick-pick (3 days / 1 week / 1 month…) or type the date.
-   _Planned: point the camera at the printed date and OCR reads it automatically —
-   minimal typing for older users._
-
-## Features (MVP — built)
-
-- 📷 Barcode scanning (camera) with manual fallback
-- 🔎 Automatic product lookup (Open Food Facts)
-- 📅 Expiry capture with quick-pick chips + Use-by / Best-before
-- 🗂️ Larder list, colour-coded by urgency (red expired · orange within alert window · amber this week · green fine)
-- ⏰ Local reminder N days before expiry (default 3) with sound
-- ⚙️ Customisable default reminder lead time, sound, and time of day
-- ✓ Mark as used / delete
-- 💾 Works fully offline (on-device storage)
-
-## Roadmap (Phase 2 — the sellable bit)
-
-- 👪 **Shared stores** — invite family/carers, roles: Owner / Manager / Viewer
-- 🔔 **Carer alerts** — the carer gets the expiry reminder too, and can add/edit/delete
-- ☁️ **Cloud sync** (Supabase) — realtime shared larders + push notifications
-- 🏥 **Care-provider dashboard** — manage many clients' kitchens (B2B2C subscription)
-- 🔤 **OCR expiry capture** from the printed date
-- 🛒 Shopping list from used/expired items · recipe suggestions to use up soon-to-expire food
-
-## Tech
-
-| Layer | Choice |
-|---|---|
-| App | Expo (React Native + React Native Web) — iOS, Android, Web |
-| Language | TypeScript |
-| Storage (now) | On-device AsyncStorage behind a swappable `FoodRepository` |
-| Storage (phase 2) | Supabase (Postgres + auth + realtime + push) — same interface |
-| Product data | Open Food Facts API |
-| Notifications | expo-notifications (scheduled local alerts) |
-
-## Run it
-
-```bash
-npm install
-npm run web      # open in a browser
-npm run android  # Android device/emulator (Expo Go or dev build)
-npm run ios      # iOS simulator (macOS)
+```sh
+npm ci
+npm test
+VERIFI_BUSINESS_KEY='choose-a-long-random-key' VERIFI_ADMIN_KEY='choose-a-different-long-random-key' npm start
 ```
 
-> Camera barcode scanning and push notifications need a real device/emulator.
-> On web, use the manual barcode field and quick-pick expiry — the full loop still works.
+Open http://127.0.0.1:3000. The workspace keys enable the manufacturer and administrator views respectively. Omit a key to disable that workspace. Use HTTPS for camera and location outside localhost. The database defaults to `.verifi/verifi.sqlite`. Set `VERIFI_DB` to use a different database file. Keep the file private.
 
-## Project structure
+Try `DEMO-1204` for a sample registration, `DEMO-2306` for a sample expired registration, and `VF-DEMO-001` for a sample item serial. Lookups show the recorded source and check date. Demo records are fictional. Manufacturers can add catalogue entries and download QR labels for newly issued serials. Administrators can import sourced registration records, review reports and download case records for manual referral. Imported records are snapshots of their sources.
 
-```
-App.tsx                  # root: navigation + data wiring + notification scheduling
-src/
-  types.ts               # FoodItem, Settings
-  theme.ts               # accessible colours / spacing / type
-  utils/date.ts          # expiry maths + urgency + friendly labels
-  storage/repository.ts  # FoodRepository interface + AsyncStorage impl (swap → Supabase)
-  services/
-    productLookup.ts      # Open Food Facts barcode lookup
-    notifications.ts      # schedule / cancel local expiry reminders
-  components/             # Button, ItemCard
-  screens/               # Home, AddItem, ItemDetail, Settings
-```
+Report location is optional and submitted only with the report. Scan history is stored in the current browser. The admin workspace is the only role that can see report contents and locations.
+
+## Pilot scope
+
+This release is a responsive web application with a web manifest. Native iOS and Android packages, live NAFDAC/SON feeds, verified multi-company accounts, report photo uploads, recall alerts, automated referrals and advertising are future work. Shared role keys and anonymous reports and reviews are intended for a controlled pilot. Before public deployment, add individual accounts and tenant isolation, abuse controls, review moderation, and a location retention policy.
