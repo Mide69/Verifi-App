@@ -1,9 +1,9 @@
-export const launch = `<section class="launch">
+export const launch = signedIn => `<section class="launch">
   <div class="launch-copy">
     <div class="eyebrow"><span></span> PRODUCT VERIFICATION · NIGERIA</div>
     <h1>Know what<br>you’re buying<span>.</span></h1>
     <p>Check the code on a pack, see what matches, and report anything that looks suspicious.</p>
-    <a class="launch-cta" href="#demo-access">Start a product check <span aria-hidden="true">↘</span></a>
+    ${signedIn ? '<button class="launch-cta" data-page="Scan">Start a product check <span aria-hidden="true">↗</span></button>' : '<a class="launch-cta" href="#demo-access">Start a product check <span aria-hidden="true">↘</span></a>'}
   </div>
   <figure class="launch-photo">
     <img src="/shopper.webp" alt="A shopper holds a phone up to a code on a grocery pack">

@@ -5,7 +5,7 @@ const key = 'verifi-pilot-v1'
 let data = JSON.parse(localStorage.getItem(key) || 'null') || seed()
 let profile = sessionStorage.getItem('verifi-profile') || ''
 let role = 'Consumer'
-let page = 'Scan'
+let page = 'Home'
 let result, lastCode, stream, openingCamera, noticeTimer
 const view = document.querySelector('#view')
 const nav = document.querySelector('#nav')
@@ -53,7 +53,9 @@ function scanResult() {
 }
 
 function consumer() {
-  if (!profile) return launch + `<section class="panel access" id="demo-access"><div><div class="eyebrow">TRY THE PILOT</div><h2>Start a demo session</h2><p class="muted">Explore verification with sample products. Your activity is saved in this browser.</p></div><div>${form('signin',select('Demo sign-in method','method',options(['Google','Email','Phone'])) + field('Demo name or identifier','name','required maxlength="60" value="Demo shopper"'),'Start demo session')}<p class="muted">Use sample details only. No external sign-in or verification codes are sent.</p></div></section>` + metrics([['Demo shoppers',data.profiles?.length || 0],['Approved companies',data.companies.filter(c=>c.status==='Approved').length],['Catalogue products',data.products.length],['Product checks',data.scans.length],['Confirmed cases',clusters(data).filter(g=>caseStatus(g)==='Confirmed').length]])
+  const access = () => `<section class="panel access" id="demo-access"><div><div class="eyebrow">TRY THE PILOT</div><h2>Start a demo session</h2><p class="muted">Explore verification with sample products. Your activity is saved in this browser.</p></div><div>${form('signin',select('Demo sign-in method','method',options(['Google','Email','Phone'])) + field('Demo name or identifier','name','required maxlength="60" value="Demo shopper"'),'Start demo session')}<p class="muted">Use sample details only. No external sign-in or verification codes are sent.</p></div></section>`
+  if (page === 'Home') return launch(Boolean(profile)) + (profile ? '' : access()) + metrics([['Demo shoppers',data.profiles?.length || 0],['Approved companies',data.companies.filter(c=>c.status==='Approved').length],['Catalogue products',data.products.length],['Product checks',data.scans.length],['Confirmed cases',clusters(data).filter(g=>caseStatus(g)==='Confirmed').length]])
+  if (!profile) return heading('CONSUMER ACCESS','Start a demo session','Sign in to use the shopper workspace.') + access()
   if (page === 'Scan') return heading('PRODUCT CHECK','Check a product','Scan a supported code or enter a pack serial or registration number.') + `<div class="split scan-grid"><section class="panel scanner"><div class="scan-stage"><div class="scan-target" aria-hidden="true"><i></i><i></i><i></i><i></i><span></span></div><video hidden id="camera" playsinline muted></video><small>ALIGN THE PACK CODE</small></div><div class="scanner-tools"><button data-action="camera" class="primary">Use camera</button><button data-action="sample">Try sample code</button></div><div class="manual"><div class="eyebrow">MANUAL LOOKUP</div><h2>Enter a code</h2><p class="muted">You can optionally add the state and LGA where you scanned the pack.</p>${form('scan',field('Product code','code',`required maxlength="180" placeholder="e.g. VF-DEMO-001" value="${escape(lastCode)}"`) + `<div class="pair">${geo}</div>`,'Check product')}</div></section><section class="panel result-panel"><div class="result-heading"><div><div class="eyebrow">VERIFICATION</div><h2>Check result</h2></div><span class="workspace-icon">${icon('Approvals')}</span></div>${scanResult()}</section></div><section class="panel" id="report" hidden><h2>Report a suspicious pack</h2>${form('report-form',`<p class="muted">Enter where you bought or found the pack.</p><div class="pair">${geo}</div>` + field('What did you notice?','reason','required maxlength="500"') + field('Sample photo (optional)','photo','type="file" accept="image/jpeg,image/png,image/webp"'),'Submit private report')}</section>`
   if (page === 'History') {
     const scans = data.scans.filter(item => item.author === profile)
@@ -97,6 +99,9 @@ function stopCamera() {
 function render() {
   stopCamera()
   document.querySelector('#crumb').innerHTML = `<span>${role}</span><span aria-hidden="true">/</span><strong>${page}</strong>`
+  const home = document.querySelector('.home-link')
+  if (page === 'Home') home.setAttribute('aria-current', 'page')
+  else home.removeAttribute('aria-current')
   document.querySelector('#section-label').textContent = role.toUpperCase() + ' TOOLS'
   for (const button of workspaceNav.querySelectorAll('[data-role]')) {
     if (button.dataset.role === role) button.setAttribute('aria-current', 'true')
@@ -175,12 +180,19 @@ document.addEventListener('click',event=>{
     window.scrollTo(0, 0)
     return
   }
+  if (d.action === 'home') {
+    role = 'Consumer'
+    page = 'Home'
+    render()
+    window.scrollTo(0, 0)
+    return
+  }
   if (d.page) {
     page = d.page
     render()
     window.scrollTo(0, 0)
     if (!button.isConnected) {
-      nav.querySelector('[aria-current="page"]').focus({preventScroll:true})
+      nav.querySelector('[aria-current="page"]')?.focus({preventScroll:true})
     }
     return
   }
@@ -251,6 +263,7 @@ view.addEventListener('submit',async event=>{
   const f=Object.fromEntries([...new FormData(event.target)].map(([k,v])=>[k,typeof v==='string'?v.trim():v]))
   switch (event.target.id) {
     case 'signin':
+      if (page === 'Home') page = 'Scan'
       if (!f.name) return
       profile=f.name
       sessionStorage.setItem('verifi-profile',profile)
