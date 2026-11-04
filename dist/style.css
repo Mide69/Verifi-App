@@ -166,3 +166,11 @@ body[data-home="true"] .partner-link{display:inline-block;color:#285449;font-wei
 .demo-packs small{display:block;color:var(--muted);font-weight:500}
 .demo-packs button>span:last-child{margin-left:auto}
 @media(max-width:540px){.demo-packs{grid-template-columns:1fr}}
+
+.live header{max-width:none}
+.live header .brand{font-size:24px;color:#21483b;padding:0}
+.live main{max-width:1200px}
+.live #live-message:not(:empty){padding:11px 13px;margin:12px 0;background:#e4eee4;border-radius:7px;overflow-wrap:anywhere}
+.live article form,.live details form{margin-top:10px}
+.live article form{max-width:240px}
+.live .label-link{color:#195c50;text-decoration:underline;overflow-wrap:anywhere}

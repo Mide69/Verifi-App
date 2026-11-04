@@ -26,3 +26,19 @@ In Company, use the approved sample workspace to add a product and batch, then o
 ## Demo boundaries
 
 Use fictional data only. Workspaces share browser-local data on this device, and the role switch intentionally simulates access. Sign-in choices are simulated. Registration records are sample data. Referrals stay inside the demo. Camera detection depends on browser support and permission, so every check also accepts typed codes. Locations are entered manually as state and LGA. Clear the site's browser data to reset the pilot.
+
+## Server-backed workspace
+
+Open `http://localhost:3000/live` (or `http://localhost:3001/live` if using port 3001). The public demo remains at `/`. The product workspace starts with an empty database and stores data in `data/verifi.sqlite`. Use Node.js 24. Run `npm.cmd test` to exercise the HTTP workflow and role boundaries.
+
+Shoppers register in the browser with an email and password. A Verifi administrator verifies partners out of band before creating accounts. From PowerShell, repeat the following for each account with a distinct password:
+
+```powershell
+Read-Host -MaskInput 'Manufacturer password' | node provision.mjs manufacturer manufacturer@example.test "Example Foods"
+Read-Host -MaskInput 'Operator password' | node provision.mjs operator operator@example.test
+Read-Host -MaskInput 'Regulator password' | node provision.mjs regulator regulator@example.test NAFDAC
+```
+
+Use the same working directory and `VERIFI_DB` setting for provisioning and serving. Manufacturer accounts have individually scoped catalogues. The operator chooses the referral agency, and only a regulator account provisioned for that agency can acknowledge the referral. A code match means the issued serial exists in Verifi. The workspace has no live registration or government integration.
+
+This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.

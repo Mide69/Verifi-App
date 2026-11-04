@@ -1,12 +1,16 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import QRCode from 'qrcode'
+import { openLive } from './live.mjs'
+
+const live = openLive()
 
 const args = process.argv.slice(2)
 const option = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback
-const assets = { '/shopper.webp': ['shopper.webp', 'image/webp'], '/visuals.js': ['visuals.js', 'text/javascript'], '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/model.js': ['model.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] }
+const assets = { '/live': ['live.html', 'text/html'], '/live.js': ['live.js', 'text/javascript'], '/shopper.webp': ['shopper.webp', 'image/webp'], '/visuals.js': ['visuals.js', 'text/javascript'], '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/model.js': ['model.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] }
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost')
+  if (url.pathname.startsWith('/api/')) return live.handle(req, res, url.pathname)
   if (url.pathname === '/qr') {
     const code = url.searchParams.get('code') || ''
     if (!/^[-A-Z0-9_]{1,100}$/.test(code)) { res.writeHead(400).end('Invalid pack serial'); return }
