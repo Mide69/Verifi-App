@@ -59,9 +59,20 @@ test('issued pack, report, scoped referral and persistence', async t => {
   const {id}=submitted.data
   assert.deepEqual((await call('reports',undefined,nafdac)).data,[])
   assert.deepEqual((await call('reports',undefined,other)).data,[])
-  assert.equal((await call('reports',undefined,manufacturer)).data[0].lot,'A01')
+  assert.deepEqual((await call('reports',undefined,manufacturer)).data,[{
+    id,code,created:submitted.data.created,stage:'submitted',product:'Rice',lot:'A01'
+  }])
+  for (const viewer of [shopper,operator]) {
+    const [report] = (await call('reports',undefined,viewer)).data
+    assert.equal(report.area,'Ikeja')
+    assert.equal(report.reason,'Seal damaged')
+  }
   assert.equal((await call('report-action',{id,action:'refer',agency:'NAFDAC'},shopper)).status,403)
   assert.equal((await call('report-action',{id,action:'refer',agency:'NAFDAC'},operator)).status,200)
+  const [referred] = (await call('reports',undefined,nafdac)).data
+  assert.equal(referred.id,id)
+  assert.equal(referred.area,'Ikeja')
+  assert.equal(referred.reason,'Seal damaged')
   assert.deepEqual((await call('reports',undefined,son)).data,[])
   assert.equal((await call('report-action',{id,action:'acknowledge'},son)).status,409)
   assert.equal((await call('report-action',{id,action:'acknowledge'},nafdac)).status,200)
