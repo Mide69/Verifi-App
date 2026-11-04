@@ -29,6 +29,19 @@ export function seed() {
   }
 }
 
+export function addDemoEvidence(data) {
+  if (!data.scans.some(scan => scan.id === 'demo-reused-serial')) {
+    for (const [id, state, lga] of [['demo-reused-serial', 'Lagos', 'Ikeja'], ['demo-reused-serial-2', 'FCT', 'Abuja Municipal']]) {
+      data.scans.push({ id, code: 'VF-DEMO-002', product: 'rice', author: 'Sample shopper', state, lga, date: today(), title: 'Sample scan history' })
+    }
+  }
+  const day = today()
+  if (data.reports.some(report => report.id === 'demo-a-' + day)) return
+  for (const [suffix, author, reason] of [['a', 'Sample reporter A', 'Seal print differs from the sample label.'], ['b', 'Sample reporter B', 'The serial appears on a second pack.']]) {
+    data.reports.push({id:'demo-' + suffix + '-' + day, code:'VF-DEMO-002', batch:'NF-2609', product:'rice', author, state:'Lagos', lga:'Ikeja', date:day, agency:'NAFDAC', reason})
+  }
+}
+
 export function check(data, raw, date = today()) {
   const code = raw.trim().toUpperCase()
   const batch = data.batches.find(item => item.codes.includes(code))
@@ -39,7 +52,7 @@ export function check(data, raw, date = today()) {
   if (batch.recall) return { ...base, title: 'Do not use', tone: 'red', detail: 'This batch is marked as recalled in the demo.' }
   if (batch.expires && batch.expires < date) return { ...base, title: 'Expiry date passed', tone: 'red', detail: 'The recorded expiry date for this pack has passed.' }
   const locations = new Set(data.scans.filter(scan => scan.code === code && scan.state && scan.lga).map(scan => scan.state + '/' + scan.lga))
-  if (locations.size > 1) return { ...base, title: 'Unusual scan activity', tone: 'amber', detail: 'This serial has appeared in multiple local areas. Review the pack before buying.' }
+  if (locations.size > 1) return { ...base, title: 'Unusual scan activity', tone: 'amber', detail: 'This serial appeared in ' + locations.size + ' local areas. Check the packaging and report it if something looks wrong.' }
   return { ...base, title: 'Pack code matched', tone: 'green', detail: 'The serial matches a manufacturer record in the demo catalogue.' }
 }
 

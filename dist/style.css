@@ -151,3 +151,18 @@ header{min-height:62px}
 .home-link[aria-current="page"]{background:#e2eee6;border-color:#d4e3d9}
 .launch-cta{border:0}
 @media(max-width:400px){.header-path{gap:4px}#crumb{gap:4px}.demo{font-size:9px}}
+
+body[data-home="true"] .shell{display:block}
+body[data-home="true"] .shell>aside{display:none}
+body[data-home="true"] #crumb{display:none}
+body[data-home="true"] .home-link{font-size:19px;font-weight:800}
+.partner-link{display:none}
+body[data-home="true"] .partner-link{display:inline-block;color:#285449;font-weight:680}
+.demo-story,.partner-entry{padding:clamp(17px,3vw,30px);scroll-margin-top:16px}
+.demo-story h2,.partner-entry h2{font-size:clamp(22px,4vw,34px);margin:5px 0}
+.demo-packs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.demo-packs button{display:flex;align-items:center;gap:12px;text-align:left;padding:12px;background:#eff5ed}
+.demo-packs button:hover{background:#e1eee0}
+.demo-packs small{display:block;color:var(--muted);font-weight:500}
+.demo-packs button>span:last-child{margin-left:auto}
+@media(max-width:540px){.demo-packs{grid-template-columns:1fr}}

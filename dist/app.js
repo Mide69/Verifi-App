@@ -1,5 +1,5 @@
 import { launch, activityChart, caseChart, icon, shortcut, blank, art } from './visuals.js'
-import { seed, check, clusters } from './model.js'
+import { seed, check, clusters, addDemoEvidence } from './model.js'
 
 const key = 'verifi-pilot-v1'
 let data = JSON.parse(localStorage.getItem(key) || 'null') || seed()
@@ -36,6 +36,11 @@ const form = (id, content, button) => `<form id="${id}">${content}<button class=
 const geo = field('State', 'state', 'placeholder="e.g. Lagos"') + field('Local government area', 'lga', 'placeholder="e.g. Ikeja"')
 const company = () => data.companies.find(item => item.id === (sessionStorage.getItem('verifi-company') || 'harvest'))
 const companyProducts = () => data.products.filter(item => item.company === company()?.id)
+const reference = report => 'VF-' + report.id.slice(0,8).toUpperCase()
+const reportStatus = report => {
+  const group = clusters(data).find(item => item.reports.includes(report))
+  return group ? caseStatus(group) : 'New'
+}
 const caseStatus = group => data.cases[group.key] || 'New'
 const recent = scans => table(['Product or code','Result','Area','Date'], scans.slice().reverse().map(s => [escape(productName(s.product || s.code)),escape(s.title),escape([s.lga,s.state].filter(Boolean).join(', ') || 'Unspecified'),s.date]))
 
@@ -60,7 +65,7 @@ function consumer() {
   if (page === 'History') {
     const scans = data.scans.filter(item => item.author === profile)
     const reports = data.reports.filter(item => item.author === profile)
-    return heading('YOUR ACTIVITY','Scan history','See your recent checks and private reports.') + metrics([['Scans', scans.length],['Reports',reports.length],['Community posts',data.reviews.filter(item => item.author === profile).length]]) + activityChart(scans) + `<section class="panel"><h2>Recent checks</h2>${recent(scans)}</section><section class="panel"><h2>Your reports</h2>${table(['Product','Location','Reason'], reports.map(r => [escape(productName(r.product)),escape(r.lga + ', ' + r.state),escape(r.reason)]))}</section>`
+    return heading('YOUR ACTIVITY','Scan history','See your recent checks and private reports.') + metrics([['Scans', scans.length],['Reports',reports.length],['Community posts',data.reviews.filter(item => item.author === profile).length]]) + activityChart(scans) + `<section class="panel"><h2>Recent checks</h2>${recent(scans)}</section><section class="panel"><h2>Your reports</h2>${table(['Reference','Product','Location','Status'], reports.map(r => [escape(reference(r)),escape(productName(r.product)),escape(r.lga + ', ' + r.state),escape(reportStatus(r))]))}</section>`
   }
   if (page === 'Catalogue') return heading('PRODUCT DISCOVERY','Explore the catalogue','Search sample products by name or registration and read community feedback.') + `<section class="panel">${field('Search products','search','type="search" placeholder="Try rice or DEMO-SON-210"')}<div class="catalogue-grid" id="catalogue"></div></section>`
   return heading('COMMUNITY','Product discussions','Read experiences from other shoppers or share your own.') + `<div class="split community-grid"><section class="panel feed"><h2>Latest posts</h2>${data.reviews.slice().reverse().map(r => `<article class="feed-post"><div class="avatar" aria-hidden="true">${escape(r.author.slice(0,1).toUpperCase())}</div><div><small>${escape(productName(r.product))}</small><h3>${escape(r.author)} · ${escape(r.kind)}${r.kind === 'Review' ? ' · ' + escape(r.rating) + '/5' : ''}</h3><p>${escape(r.body)}</p><details><summary>Replies (${r.replies?.length || 0})</summary>${(r.replies || []).map(reply=>`<p><b>${escape(reply.author)}</b> · ${escape(reply.body)}</p>`).join('')}${form('reply',`<input type="hidden" name="index" value="${data.reviews.indexOf(r)}">` + field('Reply','body','required maxlength="500"'),'Post reply')}</details></div></article>`).join('')}</section><section class="panel compose"><div class="screen-icon">${icon('Community')}</div><h2>Share an experience</h2>${form('review',select('Product','product',options(data.products,p=>p.name,p=>p.id)) + select('Post type','kind',options(['Review','Discussion'])) + select('Rating (for reviews)','rating',options(['5','4','3','2','1'])) + '<label>Message<textarea name="body" required maxlength="1000"></textarea></label>','Publish post')}</section></div>`
@@ -77,7 +82,7 @@ function business() {
   if (active?.status !== 'Approved') return heading('COMPANY ACCESS','Approval required','This workspace becomes available once an operator approves the demo company.') + `<section class="panel">${workspace}</section>`
   if (page === 'Products') return heading('MANUFACTURER CATALOGUE','Products','Manage the product details shoppers see when they check a pack.') + `<div class="split manage-grid"><section class="panel"><h2>Catalogue</h2>${table(['Product','Registration',''],products.map(p=>[`<div class="record-product">${art(p.id,'mini')}<b>${escape(p.name)}</b></div>`,escape(p.registration),`<button data-edit="${escape(p.id)}">Edit</button>`]))}</section><section class="panel"><h2>Product details</h2>${form('product','<input type="hidden" name="id">' + field('Product name','name') + select('Registration authority','agency',options(['NAFDAC','SON'])) + field('Registration number','registration') + field('Pack size','size','') + field('Ingredients','ingredients','') + field('Allergens','allergens','') + field('Storage instructions','storage',''),'Save product')}</section></div>`
   if (page === 'Batches') return heading('PACK TRACEABILITY','Batches and serials','Create pack serials or enter existing codes for a batch.') + `<div class="split manage-grid"><section class="panel"><h2>Batch register</h2>${table(['Batch','Product','Packs','Expiry',''],batches.map(b=>[escape(b.lot),escape(productName(b.product)),b.codes.length,escape(b.expires),`<button data-download="${escape(b.codes[0])}">Export codes</button> <button data-labels="${escape(b.codes[0])}">QR labels</button> <button data-recall="${escape(b.codes[0])}">${b.recall ? 'Clear recall' : 'Mark recalled'}</button>`]))}</section><section class="panel"><h2>Add batch</h2>${products.length ? form('batch',select('Product','product',options(products,p=>p.name,p=>p.id)) + field('Lot number','lot') + field('Production date','made','required type="date"') + field('Expiry date','expires','required type="date"') + field('Number of new codes','count','type="number" min="1" max="100" value="5" required') + field('Existing codes (comma-separated, optional)','codes','maxlength="3000"'),'Create batch') : '<p>Add a product first.</p>'}</section></div>`
-  return heading('MANUFACTURER WORKSPACE',escape(active.name),'Track your catalogue, pack checks and suspicious product reports.') + metrics([['Products',products.length],['Pack codes',batches.reduce((n,b)=>n+b.codes.length,0)],['Scans',scans.length],['Reports',reports.length]]) + `<div class="split">${activityChart(scans)}<section class="panel work-links"><h2>Manage your records</h2>${shortcut('Products','Manage catalogue')}${shortcut('Batches','Manage batches and QR labels')}${shortcut('Onboarding','Company onboarding')}</section></div><section class="panel"><h2>Scan activity by location</h2>${recent(scans)}</section><section class="panel"><h2>Report trends</h2>${table(['Product','State','LGA','Distinct reporters'],clusters({...data,reports}).map(g=>[escape(productName(g.product)),escape(g.state),escape(g.lga),g.people.size]))}</section>`
+  return heading('MANUFACTURER WORKSPACE',escape(active.name),'Track your catalogue, pack checks and suspicious product reports.') + metrics([['Products',products.length],['Pack codes',batches.reduce((n,b)=>n+b.codes.length,0)],['Scans',scans.length],['Reports',reports.length]]) + `<div class="split">${activityChart(scans)}<section class="panel work-links"><h2>Manage your records</h2>${shortcut('Products','Manage catalogue')}${shortcut('Batches','Manage batches and QR labels')}${shortcut('Onboarding','Company onboarding')}</section></div><section class="panel"><h2>Scan activity by location</h2>${recent(scans)}</section><section class="panel"><h2>Report trends</h2>${table(['Product','State','LGA','Distinct reporters'],clusters({...data,reports}).map(g=>[escape(productName(g.product)),escape(g.state),escape(g.lga),g.people.size]))}</section><section class="panel"><h2>Reported pack identifiers</h2>${table(['Product','Batch','Pack serial','Area'],reports.filter(r=>r.code).map(r=>[escape(productName(r.product)),escape(r.batch || 'Unknown'),escape(r.code),escape(r.lga + ', ' + r.state)]))}</section>`
 }
 
 let agency = 'NAFDAC'
@@ -86,7 +91,7 @@ function oversight() {
   const groups = clusters(data).filter(g=>isOperator || (g.agency === agency && ['Referred','Confirmed'].includes(caseStatus(g))))
   if (page === 'Approvals') return heading('VERIFI OPERATIONS','Company approvals','Review sample evidence and approve or reject access.') + `<section class="panel approvals-panel"><h2>Application queue</h2>${table(['Company','Registration','Address and evidence','Status','Decision'],data.companies.map(c=>[escape(c.name),escape(c.registration),escape([c.address,c.reference].filter(Boolean).join(' · ')),`<span class="badge approval-${c.status.toLowerCase()}">${escape(c.status)}</span>`, c.status === 'Pending' ? `<button data-approve="${escape(c.id)}">Approve</button> <button data-reject="${escape(c.id)}">Reject</button>` : 'Reviewed']))}</section>`
   const scope = isOperator ? '' : select('Demo regulator','agency',options(['NAFDAC','SON']))
-  if (page === 'Cases') return heading('MARKET SURVEILLANCE','Investigation cases','Review location clusters and keep suspected activity separate from confirmed cases.') + `<section class="panel cases-panel"><div class="case-toolbar"><h2>Case queue</h2><button data-action="export-cases">Export case summary</button></div>${scope}<div class="pair">${field('Filter by product or location','case-search','type="search"')}${field('Report date','case-date','type="date"')}</div><div id="cases">${groups.length ? groups.map((g,i)=>`<article data-case-row data-date="${g.date}"><div class="case-head"><div><small>${escape(g.agency || 'Unassigned')} · ${g.date}</small><h3>${escape(productName(g.product))}</h3><p>${escape(g.lga)}, ${escape(g.state)}</p></div><span class="badge">${escape(caseStatus(g))}</span></div><div class="case-counts"><div><strong>${g.people.size}</strong><span>Distinct reporters</span></div><div><strong>${g.reports.length}</strong><span>Reports</span></div></div><details><summary>View report evidence</summary>${g.reports.map(r=>`<p>${escape(r.reason)}${r.photo ? `<br><img class="evidence" alt="Sample report evidence" src="${escape(r.photo)}">` : ''}</p>`).join('')}</details><div class="actions">${isOperator ? `<button data-case="${i}" data-status="Under review">Review</button><button data-case="${i}" data-status="Referred">Refer to ${escape(g.agency || 'agency')}</button>` : ''}<button data-case="${i}" data-status="Confirmed">Mark confirmed</button></div></article>`).join('') : blank('Cases','No cases in this workspace','Referred investigations will appear here when available.')}</div></section>`
+  if (page === 'Cases') return heading('MARKET SURVEILLANCE','Investigation cases','Review location clusters and keep suspected activity separate from confirmed cases.') + `<section class="panel cases-panel"><div class="case-toolbar"><h2>Case queue</h2><button data-action="export-cases">Export case summary</button></div>${scope}<div class="pair">${field('Filter by product or location','case-search','type="search"')}${field('Report date','case-date','type="date"')}</div><div id="cases">${groups.length ? groups.map((g,i)=>`<article data-case-row data-date="${g.date}"><div class="case-head"><div><small>${escape(g.agency || 'Unassigned')} · ${g.date}</small><h3>${escape(productName(g.product))}</h3><p>${escape(g.lga)}, ${escape(g.state)}</p></div><span class="badge">${escape(caseStatus(g))}</span></div><div class="case-counts"><div><strong>${g.people.size}</strong><span>Distinct reporters</span></div><div><strong>${g.reports.length}</strong><span>Reports</span></div></div><details><summary>View report evidence</summary>${g.reports.map(r=>`<p><b>${escape(reference(r))}</b> · ${escape(r.reason)}${r.code ? `<br>Serial: ${escape(r.code)} · Batch: ${escape(r.batch || 'Unknown')}` : ''}${r.signal ? `<br>Check result: ${escape(r.signal)}` : ''}${r.photo ? `<br><img class="evidence" alt="Sample report evidence" src="${escape(r.photo)}">` : ''}</p>`).join('')}</details><div class="actions">${isOperator ? `<button data-case="${i}" data-status="Under review">Review</button><button data-case="${i}" data-status="Referred">Refer to ${escape(g.agency || 'agency')}</button>` : ''}<button data-case="${i}" data-status="Confirmed">Mark confirmed</button></div></article>`).join('') : blank('Cases','No cases in this workspace','Referred investigations will appear here when available.')}</div></section>`
   const products = data.products.filter(p=>isOperator || p.agency===agency)
   const scans = data.scans.filter(s=>isOperator || products.some(p=>p.id===s.product))
   return heading('MARKET SURVEILLANCE',isOperator ? 'Verifi operations' : agency + ' overview','Monitor demo activity and investigate emerging product risks.') + (scope ? `<section class="panel">${scope}</section>` : '') + metrics([['Products',products.length],['Scans',scans.length],['Case groups',groups.length],['Confirmed cases',groups.filter(g=>caseStatus(g)==='Confirmed').length]]) + (isOperator ? metrics([['Demo shoppers',data.profiles?.length || 0],['Approved companies',data.companies.filter(c=>c.status==='Approved').length]]) : '') + `<div class="split">${activityChart(scans)}${caseChart(groups,caseStatus)}</div>` + `<section class="panel"><h2>Recent checks</h2>${recent(scans)}</section>`
@@ -108,6 +113,7 @@ function render() {
     else button.removeAttribute('aria-current')
   }
   nav.innerHTML = pages[role].map(p=>`<button data-page="${p}" ${page===p?'aria-current="page"':''}>${icon(p)}<span>${p}</span></button>`).join('')
+  document.body.dataset.home = String(page === 'Home')
   view.dataset.page = page.toLowerCase()
   view.dataset.role = role.toLowerCase()
   view.innerHTML = role==='Consumer' ? consumer() : role==='Company' ? business() : oversight()
@@ -173,6 +179,19 @@ document.addEventListener('click',event=>{
   const button=event.target.closest('button')
   if (!button) return
   const d=button.dataset
+  if (d.demoPack) {
+    if (!profile) {
+      profile = 'Walkthrough shopper'
+      sessionStorage.setItem('verifi-profile', profile)
+      data.profiles = [...new Set([...(data.profiles || []), profile])]
+    }
+    if (d.demoPack === 'VF-DEMO-002') addDemoEvidence(data)
+    page = 'Scan'
+    runCheck(d.demoPack, 'Lagos', 'Ikeja')
+    window.scrollTo(0, 0)
+    view.querySelector('.result-panel h2')?.scrollIntoView({block:'nearest'})
+    return
+  }
   if (d.role && d.role !== role) {
     role = d.role
     page = pages[role][0]
@@ -288,17 +307,19 @@ view.addEventListener('submit',async event=>{
       const product=result.product
       const author=profile
       const code=lastCode
+      const batch=result.batch?.lot
+      const signal=result.title
       let photo=''
       if (f.photo.size) {
         if (f.photo.size>250000 || !['image/jpeg','image/png','image/webp'].includes(f.photo.type)) return notify('Use a JPEG, PNG or WebP sample under 250 KB.')
         photo=await new Promise((resolve,reject)=>{const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(f.photo)}).catch(()=>null)
         if (!photo) return notify('Could not read the sample photo.')
       }
-      const report={id:newId(),product:product?.id || code,agency:product?.agency,author,state:f.state,lga:f.lga,reason:f.reason,date:date(),photo}
+      const report={id:newId(),code,batch,signal,product:product?.id || code,agency:product?.agency,author,state:f.state,lga:f.lga,reason:f.reason,date:date(),photo}
       data.reports.push(report)
       try { save() } catch { data.reports.pop(); return notify('Browser storage is full. Try submitting without a photo.') }
       render()
-      notify('Private demo report saved.')
+      notify('Report saved. Reference ' + reference(report) + '. Track it in History.')
       return
     }
     case 'onboard': {

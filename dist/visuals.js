@@ -14,7 +14,18 @@ export const launch = signedIn => `<section class="launch">
   <div><b>01</b><span><strong>Check the pack</strong><small>Use a serial or registration number.</small></span></div>
   <div><b>02</b><span><strong>Read the result</strong><small>See matches, expiry and recall notices.</small></span></div>
   <div><b>03</b><span><strong>Report a concern</strong><small>Help identify patterns in your area.</small></span></div>
-</div>`
+</div>
+<section class="panel demo-story">
+  <div class="eyebrow">INTERACTIVE DEMO</div>
+  <h2>Two packs. The same registration.</h2>
+  <p>Both packs carry the same sample registration. Compare what their individual codes tell you.</p>
+  <div class="demo-packs">
+    <button data-demo-pack="VF-DEMO-001">${art('rice','mini')}<span><strong>Check pack A</strong><small>VF-DEMO-001 · Ikeja, Lagos</small></span><span aria-hidden="true">↗</span></button>
+    <button data-demo-pack="VF-DEMO-002">${art('rice','mini')}<span><strong>Check pack B</strong><small>VF-DEMO-002 · Ikeja, Lagos</small></span><span aria-hidden="true">↗</span></button>
+  </div>
+  <p class="muted">Sample checks start a local demo session. A concern can be reported and followed through operator review and regulator referral.</p>
+</section>
+<section class="panel partner-entry" id="partners"><div class="eyebrow">PARTNER ACCESS</div><h2>Partner sign-in</h2><p>Explore the sample workspaces for manufacturers, regulators and Verifi operators.</p><div class="actions"><button data-role="Company">Manufacturer demo</button><button data-role="Regulator">Regulator demo</button><button data-role="Operator">Operator demo</button></div></section>`
 
 export function activityChart(scans) {
   const days = Array.from({length:7}, (_, index) => {

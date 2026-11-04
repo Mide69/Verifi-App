@@ -11,9 +11,11 @@ npm.cmd ci
 npm.cmd start
 ```
 
-Open http://localhost:3000 in your browser. The header reads **DEMO DATA · V5**. If the previous screen is still displayed, press Ctrl+F5. Browser data from the previous version is retained when using the same localhost address. Press Ctrl+C in PowerShell to stop the server. Run `npm.cmd test` to check the verification and case-grouping rules.
+Open http://localhost:3000 in your browser. The header reads **DEMO DATA · V6**. If the previous screen is still displayed, press Ctrl+F5. Browser data from the previous version is retained when using the same localhost address. Press Ctrl+C in PowerShell to stop the server. Run `npm.cmd test` to check the verification and case-grouping rules.
 
 ## Walk through the pilot
+
+On Home, try both pack checks. Pack B loads fictional cross-area scan evidence and shows an unusual-activity result. Submit a report from that result, then use its reference to follow it in History and in the investigation evidence.
 
 Start a consumer demo session. Check `VF-DEMO-001` for a matching rice pack, `DEMO-NG-1001` for registration only, `VF-DEMO-EXPIRED` for an expiry warning, or any unknown code. Enter Lagos and Ikeja in a private report to join the seeded case. Explore the catalogue, post a review or discussion, and check your history.
 
