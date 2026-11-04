@@ -44,6 +44,15 @@ test('issued pack, report, scoped referral and persistence', async t => {
   assert.equal((await call('reports',undefined)).status,401)
   assert.equal((await call('logout',{},shopper,'https://outside.example')).status,403)
 
+  const application = {company:'Pending Foods',registration:'RC 123',email:'contact@example.test',product:'Rice'}
+  const submittedApplication = await call('company-applications',application)
+  assert.equal(submittedApplication.status,201)
+  assert.equal(submittedApplication.cookie,undefined)
+  assert.equal((await call('company-applications',application)).status,409)
+  assert.equal((await call('company-applications',undefined)).status,401)
+  assert.equal((await call('company-applications',undefined,manufacturer)).status,403)
+  assert.equal((await call('company-applications',undefined,operator)).data[0].id,submittedApplication.data.reference)
+
   const batch={product:'Rice',lot:'A01',expires:'2099-01-01',count:2}
   const issued=await call('batches',batch,manufacturer)
   assert.equal(issued.status,201)
@@ -65,7 +74,10 @@ test('issued pack, report, scoped referral and persistence', async t => {
   assert.deepEqual((await call('reports',undefined,son)).data,[])
   assert.equal((await call('report-action',{id,action:'acknowledge'},son)).status,409)
   assert.equal((await call('report-action',{id,action:'acknowledge'},nafdac)).status,200)
+  assert.deepEqual((await call('public-stats')).data,{checks:2,shoppers:1,products:1,manufacturers:2,packs:2,reports:1})
   live.close()
   live=openLive(db)
+  assert.equal((await call('public-stats')).data.checks,2)
+  assert.equal((await call('company-applications',undefined,operator)).data[0].company,'Pending Foods')
   assert.equal((await call('reports',undefined,shopper)).data[0].stage,'acknowledged')
 })

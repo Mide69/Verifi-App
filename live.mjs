@@ -52,6 +52,15 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       area TEXT NOT NULL, reason TEXT NOT NULL, created TEXT NOT NULL,
       agency TEXT, stage TEXT NOT NULL DEFAULT 'submitted'
     );
+    CREATE TABLE IF NOT EXISTS company_application (
+      id TEXT PRIMARY KEY, company TEXT NOT NULL, registration TEXT NOT NULL COLLATE NOCASE,
+      email TEXT NOT NULL, product TEXT NOT NULL, regulatory_reference TEXT NOT NULL,
+      created TEXT NOT NULL, UNIQUE(registration, product COLLATE NOCASE)
+    );
+    CREATE TABLE IF NOT EXISTS public_counter (
+      name TEXT PRIMARY KEY, total INTEGER NOT NULL
+    );
+    INSERT OR IGNORE INTO public_counter VALUES ('checks', 0);
     CREATE TABLE IF NOT EXISTS audit (
       id TEXT PRIMARY KEY, actor TEXT REFERENCES account(id) NOT NULL,
       report_id TEXT REFERENCES report(id) NOT NULL, action TEXT NOT NULL, created TEXT NOT NULL
@@ -111,13 +120,38 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         if (roles.length && !roles.includes(actor.role)) fail(403,'Access denied.')
       }
       if (method === 'GET' && pathname === '/api/session') return send(200,{account:actor ? {role:actor.role,scope:actor.scope} : null})
-      if (method === 'POST' && ['/api/register','/api/login'].includes(pathname)) {
+      if (method === 'GET' && pathname === '/api/public-stats') return send(200,get(`
+        SELECT (SELECT total FROM public_counter WHERE name='checks') AS checks,
+          (SELECT COUNT(*) FROM account WHERE role='shopper') AS shoppers,
+          (SELECT COUNT(*) FROM (SELECT DISTINCT issuer, product FROM batch)) AS products,
+          (SELECT COUNT(DISTINCT scope COLLATE NOCASE) FROM account WHERE role='manufacturer') AS manufacturers,
+          (SELECT COUNT(*) FROM pack) AS packs,
+          (SELECT COUNT(*) FROM report) AS reports
+      `))
+      if (method === 'GET' && pathname === '/api/company-applications') {
+        requireRole('operator')
+        return send(200,all('SELECT * FROM company_application ORDER BY created DESC LIMIT 200'))
+      }
+      if (method === 'POST' && ['/api/register','/api/login','/api/company-applications'].includes(pathname)) {
         const ip = req.socket.remoteAddress
         const now = Date.now()
         for (const [key, value] of limits) if (value.until <= now) limits.delete(key)
         const limit = limits.get(ip) || {until:now + 60000,count:0}
         if (++limit.count > 10) fail(429,'Too many attempts. Try again in a minute.')
         limits.set(ip,limit)
+        if (pathname === '/api/company-applications') {
+          const reference = id()
+          try {
+            run('INSERT INTO company_application VALUES (?,?,?,?,?,?,?)',reference,text(body.company,100),
+              text(body.registration,80),email(body.email),text(body.product,100),
+              typeof body.regulatoryReference === 'string' && body.regulatoryReference.trim() ? text(body.regulatoryReference,120) : '',
+              new Date().toISOString())
+          } catch (error) {
+            if (error.errcode === 2067) fail(409,'An application already exists for these details.')
+            throw error
+          }
+          return send(201,{reference})
+        }
         if (pathname === '/api/register') provision(body.email,body.password)
         const address = email(body.email)
         if (typeof body.password !== 'string' || body.password.length > 128) fail(401,'Sign-in failed.')
@@ -158,6 +192,7 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         requireRole('shopper')
         const code = text(body.code,100).toUpperCase()
         const record = get('SELECT b.product,b.lot,b.expires,a.scope AS manufacturer FROM pack p JOIN batch b ON b.id=p.batch_id JOIN account a ON a.id=b.issuer WHERE p.code=?',code)
+        run("UPDATE public_counter SET total=total+1 WHERE name='checks'")
         if (!record) return send(200,{status:'unknown',code})
         return send(200,{...record,code,status:record.expires<new Date().toISOString().slice(0,10)?'expired':'matched'})
       }
