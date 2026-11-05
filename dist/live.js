@@ -12,12 +12,30 @@ async function api(path, body) {
   if (!response.ok) throw Error(data.error)
   return data
 }
-const login = `<div class="screen-head"><div><div class="eyebrow">PRODUCT WORKSPACE</div><h1>Check what you’re buying.</h1><p class="intro">Look up manufacturer-issued pack codes and report concerns.</p></div></div>
-<section class="panel narrow"><h2>Sign in or create a shopper account</h2><form data-form="login">
-<label>Email<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
-<label>Password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="current-password" required></label>
-<div class="actions"><button class="primary" value="login">Sign in</button><button value="register">Create shopper account</button></div>
-</form><p class="muted">Partner accounts are provisioned by Verifi.</p></section>`
+function authScreen() {
+  const register = new URLSearchParams(location.search).get('mode') === 'register'
+  const title = register ? 'Create a shopper account' : 'Sign in to Verifi'
+  return `<div class="screen-head"><div><div class="eyebrow">VERIFI ACCOUNT</div><h1>${title}</h1>
+  <p class="intro">${register ? 'Check pack codes, submit concerns and track your reports.' : 'Use the email and password for your Verifi account.'}</p></div></div>
+  <section class="panel narrow"><form data-form="${register ? 'register' : 'login'}">
+  <label>Email<input name="email" type="email" maxlength="254" autocomplete="username" required></label>
+  <label>Password<input name="password" type="password" ${register ? 'minlength="12"' : ''} maxlength="128" autocomplete="${register ? 'new-password' : 'current-password'}" required></label>
+  ${register ? '<p class="muted">Use at least 12 characters.</p>' : ''}
+  <button class="primary">${register ? 'Create account' : 'Sign in'}</button></form>
+  <p><a href="/live?mode=${register ? 'login' : 'register'}">${register ? 'Already registered? Sign in' : 'Create a shopper account'}</a></p>
+  <p><a href="/#companies">Register a company or product</a></p></section>`
+}
+
+function companyApplications(applications) {
+  return `<section class="panel"><h2>Company applications</h2>
+  <p>Verify company details before provisioning manufacturer access.</p>
+  ${applications.length ? applications.map(application => `<article>
+    <small>${date(application.created)} · ${safe(application.id)}</small>
+    <h3>${safe(application.company)} · ${safe(application.product)}</h3>
+    <p>Company registration ${safe(application.registration)} · ${safe(application.email)}</p>
+    <p>Product regulatory reference ${safe(application.regulatory_reference || 'Not supplied')}</p>
+  </article>`).join('') : '<p class="empty">No company applications received yet.</p>'}</section>`
+}
 
 function checkResult() {
   if (!result) return '<div class="blank"><strong>Waiting for a pack code</strong><p>Enter the serial printed on the pack.</p></div>'
@@ -49,14 +67,18 @@ function stopCamera() {
 }
 async function render() {
   stopCamera()
-  if (!account) {main.innerHTML=login+'<p id="live-message" role="status"></p>';return}
-  const [reports,batches] = await Promise.all([api('reports'),account.role==='manufacturer'?api('batches'):[]])
+  if (!account) {main.innerHTML=authScreen()+'<p id="live-message" role="status"></p>';return}
+  const [reports,batches,applications] = await Promise.all([
+    api('reports'),
+    account.role==='manufacturer' ? api('batches') : [],
+    account.role==='operator' ? api('company-applications') : []
+  ])
   let work = ''
   if (account.role==='shopper') work = `<div class="split"><section class="panel"><h2>Pack lookup</h2><form data-form="check"><label>Pack code<input name="code" maxlength="100" value="${safe(result?.code)}" required></label><button class="primary">Check code</button></form><div class="actions"><button data-camera>Scan QR code</button></div><video hidden playsinline muted></video></section><section class="panel"><h2>Verification result</h2>${checkResult()}</section></div>`
   if (account.role==='manufacturer') work = `<div class="split"><section class="panel"><h2>Register a batch</h2><form data-form="batches"><label>Product<input name="product" maxlength="100" required></label><label>Lot<input name="lot" maxlength="80" required></label><div class="pair"><label>Expiry date<input name="expires" type="date" required></label><label>Pack count<input name="count" type="number" min="1" max="100" value="1" required></label></div><button class="primary">Issue pack codes</button></form></section><section class="panel"><h2>Issued pack labels</h2>${batches.length ? `<div class="table-wrap"><table><thead><tr><th>Product / lot</th><th>Label</th></tr></thead><tbody>${batches.map(b=>`<tr><td>${safe(b.product)}<br>${safe(b.lot)}</td><td><a class="label-link" href="/qr?code=${encodeURIComponent(b.code)}" download="${safe(b.code)}.svg">${safe(b.code)} ↓</a></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Your issued codes will appear here.</p>'}</section></div>`
   main.innerHTML=`<div class="case-toolbar"><div><div class="eyebrow">${safe(account.scope || account.role.toUpperCase())} WORKSPACE</div><h1>${titles[account.role]}</h1></div><form data-form="logout"><button>Sign out</button></form></div>
   <p id="live-message" role="status">${receipt ? 'Report submitted. Reference: '+safe(receipt) : ''}</p>
-  ${work}<section class="panel"><h2>${account.role==='shopper'?'Your reports':'Report queue'}</h2>${reportCards(reports)}</section>`
+  ${work}<section class="panel"><h2>${account.role==='shopper'?'Your reports':'Report queue'}</h2>${reportCards(reports)}</section>${account.role==='operator' ? companyApplications(applications) : ''}`
 }
 main.addEventListener('click',async event=>{
   if (!event.target.closest('[data-camera]')) return
@@ -103,7 +125,10 @@ main.addEventListener('submit',async event=>{
   if (button) button.disabled = true
   try {
     const action = form.dataset.form
-    if (action==='login') account=await api(button?.value || 'login',values)
+    if (['login','register'].includes(action)) {
+      account=await api(action,values)
+      history.replaceState(null,'','/live')
+    }
     if (action==='logout') {await api('logout',{});account=null;result=null;receipt=null}
     if (action==='check') result=await api('check',values)
     if (action==='batches') await api('batches',{...values,count:Number(values.count)})
