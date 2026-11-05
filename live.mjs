@@ -198,10 +198,17 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       }
       if (pathname === '/api/reports') {
         requireRole()
-        const joined = 'SELECT r.id,r.code,r.area,r.reason,r.created,r.agency,r.stage,b.product,b.lot FROM report r LEFT JOIN pack p ON r.code=p.code LEFT JOIN batch b ON b.id=p.batch_id'
         if (method === 'GET') {
+          if (actor.role === 'manufacturer') {
+            return send(200,all(`
+              SELECT r.id,r.code,r.created,r.stage,b.product,b.lot
+              FROM report r JOIN pack p ON r.code=p.code JOIN batch b ON b.id=p.batch_id
+              WHERE b.issuer=? ORDER BY r.created DESC LIMIT 200
+            `,actor.id))
+          }
+          const joined = 'SELECT r.id,r.code,r.area,r.reason,r.created,r.agency,r.stage,b.product,b.lot FROM report r LEFT JOIN pack p ON r.code=p.code LEFT JOIN batch b ON b.id=p.batch_id'
           if (actor.role === 'operator') return send(200,all(joined+' ORDER BY created DESC LIMIT 200'))
-          const field = {shopper:'r.shopper',manufacturer:'b.issuer',regulator:'r.agency'}[actor.role]
+          const field = {shopper:'r.shopper',regulator:'r.agency'}[actor.role]
           return send(200,all(joined+` WHERE ${field}=? ORDER BY created DESC LIMIT 200`,actor.role==='regulator'?actor.scope:actor.id))
         }
         requireRole('shopper')

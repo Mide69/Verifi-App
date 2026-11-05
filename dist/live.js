@@ -54,7 +54,8 @@ function checkResult() {
 
 function reportCards(reports) {
   return reports.length ? reports.map(r=>`<article><div class="case-head"><div><small>${date(r.created)} · ${safe(r.id)}</small><h3>${safe(r.product || r.code)}</h3></div><span class="badge">${safe(r.stage)}</span></div>
-  <p>${safe(r.area)}${r.lot ? ' · Lot ' + safe(r.lot) : ''} · ${safe(r.code)}</p><p>${safe(r.reason)}</p>
+  <p>${r.area ? safe(r.area) + ' · ' : ''}${r.lot ? 'Lot ' + safe(r.lot) + ' · ' : ''}${safe(r.code)}</p>
+  ${r.reason ? `<p>${safe(r.reason)}</p>` : ''}
   ${account.role==='operator' && r.stage==='submitted' ? `<form data-form="refer"><input name="id" type="hidden" value="${safe(r.id)}"><label>Agency<select name="agency"><option>NAFDAC</option><option>SON</option></select></label><button>Refer case</button></form>` : ''}
   ${account.role==='regulator' && r.stage==='referred' ? `<form data-form="acknowledge"><input name="id" type="hidden" value="${safe(r.id)}"><button>Acknowledge case</button></form>` : ''}</article>`).join('') : '<p class="empty">No reports in this workspace yet.</p>'
 }

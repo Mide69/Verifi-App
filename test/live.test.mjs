@@ -66,17 +66,39 @@ test('issued pack, report, scoped referral and persistence', async t => {
   const submitted=await call('reports',{code,area:'Ikeja',reason:'Seal damaged'},shopper)
   assert.equal(submitted.status,201)
   const {id}=submitted.data
+  const secondShopper=(await call('register',{email:'second-buyer@example.test',password})).cookie
+  assert.deepEqual((await call('reports',undefined,secondShopper)).data,[])
+  const expectManufacturerReport = async stage => {
+    assert.deepEqual((await call('reports',undefined,manufacturer)).data,[{
+      id,code,created:submitted.data.created,stage,product:'Rice',lot:'A01'
+    }])
+    assert.deepEqual((await call('reports',undefined,other)).data,[])
+  }
   assert.deepEqual((await call('reports',undefined,nafdac)).data,[])
   assert.deepEqual((await call('reports',undefined,other)).data,[])
-  assert.equal((await call('reports',undefined,manufacturer)).data[0].lot,'A01')
+  await expectManufacturerReport('submitted')
+  for (const viewer of [shopper,operator]) {
+    const [report] = (await call('reports',undefined,viewer)).data
+    assert.equal(report.area,'Ikeja')
+    assert.equal(report.reason,'Seal damaged')
+  }
   assert.equal((await call('report-action',{id,action:'refer',agency:'NAFDAC'},shopper)).status,403)
   assert.equal((await call('report-action',{id,action:'refer',agency:'NAFDAC'},operator)).status,200)
+  await expectManufacturerReport('referred')
+  const [referred] = (await call('reports',undefined,nafdac)).data
+  assert.equal(referred.id,id)
+  assert.equal(referred.area,'Ikeja')
+  assert.equal(referred.reason,'Seal damaged')
   assert.deepEqual((await call('reports',undefined,son)).data,[])
   assert.equal((await call('report-action',{id,action:'acknowledge'},son)).status,409)
   assert.equal((await call('report-action',{id,action:'acknowledge'},nafdac)).status,200)
-  assert.deepEqual((await call('public-stats')).data,{checks:2,shoppers:1,products:1,manufacturers:2,packs:2,reports:1})
+  assert.deepEqual((await call('public-stats')).data,{checks:2,shoppers:2,products:1,manufacturers:2,packs:2,reports:1})
+  // Unissued codes must never be attributed to a manufacturer.
+  assert.equal((await call('reports',{code:'UNKNOWN',area:'Private shop',reason:'Contact buyer@example.test'},secondShopper)).status,201)
+  await expectManufacturerReport('acknowledged')
   live.close()
   live=openLive(db)
+  await expectManufacturerReport('acknowledged')
   assert.equal((await call('public-stats')).data.checks,2)
   assert.equal((await call('company-applications',undefined,operator)).data[0].company,'Pending Foods')
   assert.equal((await call('reports',undefined,shopper)).data[0].stage,'acknowledged')
