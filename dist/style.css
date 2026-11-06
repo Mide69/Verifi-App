@@ -174,3 +174,7 @@ body[data-home="true"] .partner-link{display:inline-block;color:#285449;font-wei
 .live article form,.live details form{margin-top:10px}
 .live article form{max-width:240px}
 .live .label-link{color:#195c50;text-decoration:underline;overflow-wrap:anywhere}
+
+.live .recall-confirm{display:flex;align-items:flex-start;gap:9px}
+.live .recall-confirm input{width:18px;height:18px;flex:none;margin:0}
+.live #verification-result:focus{outline:3px solid #779fff;outline-offset:3px}
