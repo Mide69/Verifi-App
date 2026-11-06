@@ -119,6 +119,8 @@ window.addEventListener('pagehide',stopCamera)
 main.addEventListener('submit',async event=>{
   event.preventDefault()
   const form = event.target
+  if (form.dataset.submitting) return
+  form.dataset.submitting = 'true'
   const button = event.submitter
   const values = Object.fromEntries(new FormData(form))
   if (button) button.disabled = true
@@ -131,12 +133,15 @@ main.addEventListener('submit',async event=>{
     if (action==='logout') {await api('logout',{});account=null;result=null;receipt=null}
     if (action==='check') result=await api('check',values)
     if (action==='batches') await api('batches',{...values,count:Number(values.count)})
-    if (action==='report') receipt=(await api('reports',{...values,code:result.code})).id
+    if (action==='report') {
+      form.dataset.requestId ||= crypto.randomUUID()
+      receipt=(await api('reports',{...values,code:result.code,requestId:form.dataset.requestId})).id
+    }
     if (['refer','acknowledge'].includes(action)) await api('report-action',{...values,action})
     await render()
   } catch(error) {
-    document.querySelector('#live-message').textContent=error.message
-  } finally { if (button) button.disabled=false }
+    document.querySelector('#live-message').textContent=error.message + (form.dataset.form==='report' ? ' If delivery is uncertain, retry this form with the same details to recover the same reference. Reloading or starting another check clears this retry protection; check Your reports first.' : '')
+  } finally { delete form.dataset.submitting; if (button) button.disabled=false }
 })
 try { account=(await api('session')).account; await render() }
 catch { main.textContent='Could not load the workspace. Refresh to try again.' }

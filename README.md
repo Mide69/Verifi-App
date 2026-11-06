@@ -55,3 +55,20 @@ can view submissions in the live workspace. Verify the company and product detai
 before provisioning a manufacturer account using the existing CLI. The form does
 not grant access or send email. Approved manufacturers sign in to register batches
 and issue pack codes.
+
+## Report submission retries
+
+The live shopper form assigns a random request ID to each report form. Retrying the
+same form with the same details returns its original reference, including after a
+server restart or case referral. Duplicate retries do not add reports, submission
+audit events or public report totals. A changed payload with the same request ID
+returns a conflict instead of silently overwriting evidence. IDs are scoped to the
+authenticated shopper. The additional SQLite table is created on startup without
+altering existing reports.
+
+This protection lasts while that form remains open. Reloading, signing out or
+starting another check creates a new form: check Your reports before submitting
+again. The ID stays in page memory; report text is not added to browser storage.
+Older API clients may omit `requestId` for compatibility and do not receive retry
+protection. New API clients should generate a UUID v4 once per report intention,
+then retain it unchanged with the same code, area and reason for retries.
