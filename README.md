@@ -55,3 +55,38 @@ can view submissions in the live workspace. Verify the company and product detai
 before provisioning a manufacturer account using the existing CLI. The form does
 not grant access or send email. Approved manufacturers sign in to register batches
 and issue pack codes.
+
+## Report submission retries
+
+The live shopper form assigns a random request ID to each report form. Retrying the
+same form with the same details returns its original reference, including after a
+server restart or case referral. Duplicate retries do not add reports, submission
+audit events or public report totals. A changed payload with the same request ID
+returns a conflict instead of silently overwriting evidence. IDs are scoped to the
+authenticated shopper. The additional SQLite table is created on startup without
+altering existing reports.
+
+This protection lasts while that form remains open. Reloading, signing out or
+starting another check creates a new form: check Your reports before submitting
+again. The ID stays in page memory; report text is not added to browser storage.
+Older API clients may omit `requestId` for compatibility and do not receive retry
+protection. New API clients should generate a UUID v4 once per report intention,
+then retain it unchanged with the same code, area and reason for retries.
+
+
+## Batch safety and shopper privacy
+
+Manufacturers can recall their own batches from Batch safety in the live workspace.
+A required confirmation and public safety notice precede submission. Every later
+check of any code in that batch shows a recall warning and the original notice.
+The notice is stored with its issuer and timestamp and survives restarts. Repeating
+the same request returns the original notice; it cannot be replaced or withdrawn
+through this interface. Other manufacturers cannot recall or inspect the batch.
+This is a Verifi notice, not notification to an external agency or recall authority.
+
+Manufacturer report queues expose only traceability fields. Shopper-entered
+locations and narratives remain available to the reporter, operators and the
+assigned regulator. The report form explains this and discourages home addresses
+and contact details. Check results explicitly distinguish a manufacturer record
+match from physical authenticity and government registration. Keyboard focus
+moves to the result after a check and to the receipt after a report.

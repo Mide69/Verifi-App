@@ -44,6 +44,10 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       id TEXT PRIMARY KEY, issuer TEXT REFERENCES account(id) NOT NULL, product TEXT NOT NULL,
       lot TEXT NOT NULL, expires TEXT NOT NULL, UNIQUE(issuer,product,lot)
     );
+    CREATE TABLE IF NOT EXISTS batch_recall (
+      batch_id TEXT PRIMARY KEY REFERENCES batch(id), actor TEXT REFERENCES account(id) NOT NULL,
+      reason TEXT NOT NULL, created TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS pack (
       code TEXT PRIMARY KEY, batch_id TEXT REFERENCES batch(id) NOT NULL
     );
@@ -51,6 +55,11 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       id TEXT PRIMARY KEY, shopper TEXT REFERENCES account(id) NOT NULL, code TEXT NOT NULL,
       area TEXT NOT NULL, reason TEXT NOT NULL, created TEXT NOT NULL,
       agency TEXT, stage TEXT NOT NULL DEFAULT 'submitted'
+    );
+    CREATE TABLE IF NOT EXISTS report_request (
+      shopper TEXT REFERENCES account(id) NOT NULL, request_id TEXT NOT NULL,
+      fingerprint TEXT NOT NULL, report_id TEXT REFERENCES report(id) NOT NULL,
+      PRIMARY KEY (shopper, request_id)
     );
     CREATE TABLE IF NOT EXISTS company_application (
       id TEXT PRIMARY KEY, company TEXT NOT NULL, registration TEXT NOT NULL COLLATE NOCASE,
@@ -172,7 +181,7 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       }
       if (pathname === '/api/batches') {
         requireRole('manufacturer')
-        if (method === 'GET') return send(200,all('SELECT b.*,p.code FROM batch b JOIN pack p ON b.id=p.batch_id WHERE issuer=? ORDER BY b.rowid DESC',actor.id))
+        if (method === 'GET') return send(200,all('SELECT b.*,p.code,r.reason AS recall_reason,r.created AS recalled_at FROM batch b JOIN pack p ON b.id=p.batch_id LEFT JOIN batch_recall r ON r.batch_id=b.id WHERE issuer=? ORDER BY b.rowid DESC',actor.id))
         const batch = {id:id(), product:text(body.product,100),lot:text(body.lot,80),expires:date(body.expires)}
         if (!Number.isInteger(body.count) || body.count < 1 || body.count > 100) fail(400,'Issue between 1 and 100 codes per batch.')
         if (batch.expires < new Date().toISOString().slice(0,10)) fail(400,'Choose a current or future expiry date.')
@@ -188,29 +197,67 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
           return send(201,{...batch,codes})
         } catch(error) { if(error.errcode === 2067) fail(409,'This product and lot already exist.'); throw error }
       }
+      if (method === 'POST' && pathname === '/api/batch-recall') {
+        requireRole('manufacturer')
+        const batchId = text(body.id,32)
+        const reason = text(body.reason,500)
+        const saved = atomic(() => {
+          // Check ownership before returning any information about the batch.
+          if (!get('SELECT id FROM batch WHERE id=? AND issuer=?',batchId,actor.id)) fail(404,'Batch not found.')
+          const previous = get('SELECT reason,created FROM batch_recall WHERE batch_id=?',batchId)
+          if (previous) {
+            if (previous.reason !== reason) fail(409,'This batch is already recalled. The original notice is retained.')
+            return previous
+          }
+          const created = new Date().toISOString()
+          run('INSERT INTO batch_recall VALUES (?,?,?,?)',batchId,actor.id,reason,created)
+          return {reason,created}
+        })
+        return send(200,saved)
+      }
       if (method === 'POST' && pathname === '/api/check') {
         requireRole('shopper')
         const code = text(body.code,100).toUpperCase()
-        const record = get('SELECT b.product,b.lot,b.expires,a.scope AS manufacturer FROM pack p JOIN batch b ON b.id=p.batch_id JOIN account a ON a.id=b.issuer WHERE p.code=?',code)
+        const record = get('SELECT b.product,b.lot,b.expires,a.scope AS manufacturer,r.reason AS recall_reason,r.created AS recalled_at FROM pack p JOIN batch b ON b.id=p.batch_id JOIN account a ON a.id=b.issuer LEFT JOIN batch_recall r ON r.batch_id=b.id WHERE p.code=?',code)
         run("UPDATE public_counter SET total=total+1 WHERE name='checks'")
         if (!record) return send(200,{status:'unknown',code})
-        return send(200,{...record,code,status:record.expires<new Date().toISOString().slice(0,10)?'expired':'matched'})
+        return send(200,{...record,code,status:record.recalled_at?'recalled':record.expires<new Date().toISOString().slice(0,10)?'expired':'matched'})
       }
       if (pathname === '/api/reports') {
         requireRole()
-        const joined = 'SELECT r.id,r.code,r.area,r.reason,r.created,r.agency,r.stage,b.product,b.lot FROM report r LEFT JOIN pack p ON r.code=p.code LEFT JOIN batch b ON b.id=p.batch_id'
         if (method === 'GET') {
+          if (actor.role === 'manufacturer') {
+            return send(200,all(`
+              SELECT r.id,r.code,r.created,r.stage,b.product,b.lot
+              FROM report r JOIN pack p ON r.code=p.code JOIN batch b ON b.id=p.batch_id
+              WHERE b.issuer=? ORDER BY r.created DESC LIMIT 200
+            `,actor.id))
+          }
+          const joined = 'SELECT r.id,r.code,r.area,r.reason,r.created,r.agency,r.stage,b.product,b.lot FROM report r LEFT JOIN pack p ON r.code=p.code LEFT JOIN batch b ON b.id=p.batch_id'
           if (actor.role === 'operator') return send(200,all(joined+' ORDER BY created DESC LIMIT 200'))
-          const field = {shopper:'r.shopper',manufacturer:'b.issuer',regulator:'r.agency'}[actor.role]
+          const field = {shopper:'r.shopper',regulator:'r.agency'}[actor.role]
           return send(200,all(joined+` WHERE ${field}=? ORDER BY created DESC LIMIT 200`,actor.role==='regulator'?actor.scope:actor.id))
         }
         requireRole('shopper')
         const report = {id:id(),code:text(body.code,100).toUpperCase(),area:text(body.area,120),reason:text(body.reason,1000),created:new Date().toISOString()}
-        atomic(()=>{
+        // Older clients may omit requestId. Current clients reuse it after an uncertain response.
+        const requestId = body.requestId
+        if (requestId !== undefined && (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))) fail(400,'Invalid report request ID.')
+        const fingerprint = hash(JSON.stringify([report.code,report.area,report.reason]))
+        const saved = atomic(()=>{
+          if (requestId !== undefined) {
+            const previous = get('SELECT fingerprint,report_id FROM report_request WHERE shopper=? AND request_id=?',actor.id,requestId)
+            if (previous) {
+              if (previous.fingerprint !== fingerprint) fail(409,'This submission already has different details. Restore the original details to retry, or check Your reports before starting a new report.')
+              return get('SELECT id,code,area,reason,created FROM report WHERE id=?',previous.report_id)
+            }
+          }
           run('INSERT INTO report (id,shopper,code,area,reason,created) VALUES (?,?,?,?,?,?)',report.id,actor.id,report.code,report.area,report.reason,report.created)
           run('INSERT INTO audit VALUES (?,?,?,?,?)',id(),actor.id,report.id,'submitted',report.created)
+          if (requestId !== undefined) run('INSERT INTO report_request VALUES (?,?,?,?)',actor.id,requestId,fingerprint,report.id)
+          return report
         })
-        return send(201,report)
+        return send(201,saved)
       }
       if (method === 'POST' && pathname === '/api/report-action') {
         requireRole('operator','regulator')
