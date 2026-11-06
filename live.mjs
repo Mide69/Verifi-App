@@ -52,6 +52,11 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       area TEXT NOT NULL, reason TEXT NOT NULL, created TEXT NOT NULL,
       agency TEXT, stage TEXT NOT NULL DEFAULT 'submitted'
     );
+    CREATE TABLE IF NOT EXISTS report_request (
+      shopper TEXT REFERENCES account(id) NOT NULL, request_id TEXT NOT NULL,
+      fingerprint TEXT NOT NULL, report_id TEXT REFERENCES report(id) NOT NULL,
+      PRIMARY KEY (shopper, request_id)
+    );
     CREATE TABLE IF NOT EXISTS company_application (
       id TEXT PRIMARY KEY, company TEXT NOT NULL, registration TEXT NOT NULL COLLATE NOCASE,
       email TEXT NOT NULL, product TEXT NOT NULL, regulatory_reference TEXT NOT NULL,
@@ -206,11 +211,24 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         }
         requireRole('shopper')
         const report = {id:id(),code:text(body.code,100).toUpperCase(),area:text(body.area,120),reason:text(body.reason,1000),created:new Date().toISOString()}
-        atomic(()=>{
+        // Older clients may omit requestId. Current clients reuse it after an uncertain response.
+        const requestId = body.requestId
+        if (requestId !== undefined && (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))) fail(400,'Invalid report request ID.')
+        const fingerprint = hash(JSON.stringify([report.code,report.area,report.reason]))
+        const saved = atomic(()=>{
+          if (requestId !== undefined) {
+            const previous = get('SELECT fingerprint,report_id FROM report_request WHERE shopper=? AND request_id=?',actor.id,requestId)
+            if (previous) {
+              if (previous.fingerprint !== fingerprint) fail(409,'This submission already has different details. Restore the original details to retry, or check Your reports before starting a new report.')
+              return get('SELECT id,code,area,reason,created FROM report WHERE id=?',previous.report_id)
+            }
+          }
           run('INSERT INTO report (id,shopper,code,area,reason,created) VALUES (?,?,?,?,?,?)',report.id,actor.id,report.code,report.area,report.reason,report.created)
           run('INSERT INTO audit VALUES (?,?,?,?,?)',id(),actor.id,report.id,'submitted',report.created)
+          if (requestId !== undefined) run('INSERT INTO report_request VALUES (?,?,?,?)',actor.id,requestId,fingerprint,report.id)
+          return report
         })
-        return send(201,report)
+        return send(201,saved)
       }
       if (method === 'POST' && pathname === '/api/report-action') {
         requireRole('operator','regulator')
