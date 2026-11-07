@@ -215,16 +215,22 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       if (method === 'POST' && pathname === '/api/report-action') {
         requireRole('operator','regulator')
         const report = text(body.id,32)
-        atomic(()=>{
+        const state = atomic(()=>{
           const at = new Date().toISOString()
+          const current = get('SELECT agency,stage FROM report WHERE id=?',report)
           if (actor.role==='operator' && body.action==='refer' && ['NAFDAC','SON'].includes(body.agency)) {
+            // A retry must not reroute the case or regress an acknowledgement.
+            if (current?.agency===body.agency && ['referred','acknowledged'].includes(current.stage)) return current
             if (!run("UPDATE report SET agency=?,stage='referred' WHERE id=? AND stage='submitted'",body.agency,report).changes) fail(409,'Report cannot be referred.')
           } else if (actor.role==='regulator' && body.action==='acknowledge') {
+            // Check agency scope before accepting an already completed action.
+            if (current?.agency===actor.scope && current.stage==='acknowledged') return current
             if (!run("UPDATE report SET stage='acknowledged' WHERE id=? AND agency=? AND stage='referred'",report,actor.scope).changes) fail(409,'Report cannot be acknowledged.')
           } else fail(403,'Action unavailable.')
           run('INSERT INTO audit VALUES (?,?,?,?,?)',id(),actor.id,report,body.action,at)
+          return get('SELECT agency,stage FROM report WHERE id=?',report)
         })
-        return send(200,{})
+        return send(200,state)
       }
       return send(404,{error:'Not found.'})
     } catch(error) {
