@@ -40,6 +40,9 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     CREATE TABLE IF NOT EXISTS session (
       token TEXT PRIMARY KEY, account_id TEXT REFERENCES account(id) NOT NULL, expires INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS disabled_account (
+      account_id TEXT PRIMARY KEY REFERENCES account(id), disabled TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS batch (
       id TEXT PRIMARY KEY, issuer TEXT REFERENCES account(id) NOT NULL, product TEXT NOT NULL,
       lot TEXT NOT NULL, expires TEXT NOT NULL, UNIQUE(issuer,product,lot)
@@ -89,6 +92,18 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     catch (error) { if (error.errcode === 2067) fail(409, 'Account could not be created.'); throw error }
   }
 
+  function disableAccount(address) {
+    address = email(address)
+    return atomic(() => {
+      const account = get('SELECT id FROM account WHERE email=?', address)
+      if (!account) fail(404, 'Account not found.')
+      // Preserve the original disable time and all business evidence on retries.
+      run('INSERT OR IGNORE INTO disabled_account VALUES (?,?)', account.id, new Date().toISOString())
+      run('DELETE FROM session WHERE account_id=?', account.id)
+      return get('SELECT disabled FROM disabled_account WHERE account_id=?', account.id)
+    })
+  }
+
   const limits = new Map()
   const secure = process.env.VERIFI_SECURE_COOKIE === '1'
   const cookieName = secure ? '__Host-verifi' : 'verifi_session'
@@ -114,7 +129,7 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         if (!body || typeof body !== 'object' || Array.isArray(body)) fail(400,'Invalid request.')
       }
       const token = (req.headers.cookie || '').split(';').map(pair=>pair.trim()).find(pair=>pair.startsWith(cookieName+'='))?.slice(cookieName.length+1)
-      const actor = token && get('SELECT a.id,a.role,a.scope FROM session s JOIN account a ON a.id=s.account_id WHERE token=? AND expires>?',hash(token),Date.now())
+      const actor = token && get('SELECT a.id,a.role,a.scope FROM session s JOIN account a ON a.id=s.account_id WHERE token=? AND expires>? AND NOT EXISTS (SELECT 1 FROM disabled_account d WHERE d.account_id=a.id)',hash(token),Date.now())
       const requireRole = (...roles) => {
         if (!actor) fail(401,'Sign in to continue.')
         if (roles.length && !roles.includes(actor.role)) fail(403,'Access denied.')
@@ -155,9 +170,9 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         if (pathname === '/api/register') provision(body.email,body.password)
         const address = email(body.email)
         if (typeof body.password !== 'string' || body.password.length > 128) fail(401,'Sign-in failed.')
-        const record = get('SELECT * FROM account WHERE email=?',address)
+        const record = get('SELECT a.*, EXISTS (SELECT 1 FROM disabled_account d WHERE d.account_id=a.id) AS disabled FROM account a WHERE email=?',address)
         const candidate = digest(body.password,record?.salt || 'verifi-unknown-account')
-        if (!record || !timingSafeEqual(candidate,Buffer.from(record.password,'hex'))) fail(401,'Sign-in failed.')
+        if (!record || record.disabled || !timingSafeEqual(candidate,Buffer.from(record.password,'hex'))) fail(401,'Sign-in failed.')
         const newToken = randomBytes(32).toString('hex')
         atomic(() => {
           run('DELETE FROM session WHERE expires<=?',Date.now())
@@ -233,5 +248,5 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     }
   }
 
-  return {handle,provision,close:()=>db.close()}
+  return {handle,provision,disableAccount,close:()=>db.close()}
 }

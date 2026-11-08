@@ -43,6 +43,31 @@ Use the same working directory and `VERIFI_DB` setting for provisioning and serv
 
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 
+### Disable an account
+
+An administrator with access to the server can block a departing or compromised
+account using the same working directory and `VERIFI_DB` as the running service:
+
+```powershell
+node disable-account.mjs operator@example.test
+```
+
+This immediately deletes every session for that account and blocks subsequent
+sign-ins. Each new authenticated request also checks the persisted disabled state.
+Requests already in progress may complete. Other accounts remain signed in. The
+command is safe to repeat and retains the first disable timestamp. An unknown
+email exits with an error. There is no HTTP endpoint or self-service reactivation;
+protect server and database access as administrative credentials.
+
+Account identity, issued packs, reports and audit history are retained. Existing
+pack codes still match: disabling access does not recall products or establish
+their safety. Historical public totals are unchanged and must not be described as
+active-account metrics. Disabling an agency account does not reroute its cases.
+Use a separately verified replacement account for continuity. Startup adds a
+`disabled_account` table without changing existing accounts or evidence. This
+offboarding control does not replace MFA, identity verification, recovery, data
+retention rules or an incident-response process.
+
 
 ## Public site and company onboarding
 
