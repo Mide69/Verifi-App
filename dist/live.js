@@ -2,6 +2,9 @@ const main = document.querySelector('#live')
 const safe = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const date = value => safe(value?.slice(0,10))
 let account, result, receipt, cameraStream, openingCamera
+let queueCursor = null
+let queueBusy = false
+const usesReportQueue = () => account?.role === 'operator' || account?.role === 'regulator'
 const titles = {shopper:'Check a pack',manufacturer:'Issue pack codes',operator:'Investigate reports',regulator:'Review referrals'}
 
 async function api(path, body) {
@@ -58,17 +61,25 @@ function reportCards(reports) {
   ${account.role==='operator' && r.stage==='submitted' ? `<form data-form="refer"><input name="id" type="hidden" value="${safe(r.id)}"><label>Agency<select name="agency"><option>NAFDAC</option><option>SON</option></select></label><button>Refer case</button></form>` : ''}
   ${account.role==='regulator' && r.stage==='referred' ? `<form data-form="acknowledge"><input name="id" type="hidden" value="${safe(r.id)}"><button>Acknowledge case</button></form>` : ''}</article>`).join('') : '<p class="empty">No reports in this workspace yet.</p>'
 }
+function reportQueue(page, before) {
+  return `<section class="panel"><h2 id="report-queue-heading" tabindex="-1">Report queue${before ? ' · older reports' : ''}</h2>
+  ${reportCards(page.reports)}
+  <div class="actions">
+  ${before ? '<form data-form="report-page"><button>Show newest reports</button></form>' : ''}
+  ${page.next ? `<form data-form="report-page"><input type="hidden" name="before" value="${safe(page.next)}"><button>Show older reports</button></form>` : ''}
+  </div></section>`
+}
 function stopCamera() {
   cameraStream?.getTracks().forEach(track=>track.stop())
   cameraStream=null
   const video = main.querySelector('video')
   if (video) { video.srcObject=null; video.hidden=true }
 }
-async function render() {
+async function render(before = queueCursor) {
   stopCamera()
   if (!account) {main.innerHTML=authScreen()+'<p id="live-message" role="status"></p>';return}
   const [reports,batches,applications] = await Promise.all([
-    api('reports'),
+    usesReportQueue() ? api('report-queue' + (before ? '?before=' + encodeURIComponent(before) : '')) : api('reports'),
     account.role==='manufacturer' ? api('batches') : [],
     account.role==='operator' ? api('company-applications') : []
   ])
@@ -77,7 +88,8 @@ async function render() {
   if (account.role==='manufacturer') work = `<div class="split"><section class="panel"><h2>Register a batch</h2><form data-form="batches"><label>Product<input name="product" maxlength="100" required></label><label>Lot<input name="lot" maxlength="80" required></label><div class="pair"><label>Expiry date<input name="expires" type="date" required></label><label>Pack count<input name="count" type="number" min="1" max="100" value="1" required></label></div><button class="primary">Issue pack codes</button></form></section><section class="panel"><h2>Issued pack labels</h2>${batches.length ? `<div class="table-wrap"><table><thead><tr><th>Product / lot</th><th>Label</th></tr></thead><tbody>${batches.map(b=>`<tr><td>${safe(b.product)}<br>${safe(b.lot)}</td><td><a class="label-link" href="/qr?code=${encodeURIComponent(b.code)}" download="${safe(b.code)}.svg">${safe(b.code)} ↓</a></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Your issued codes will appear here.</p>'}</section></div>`
   main.innerHTML=`<div class="case-toolbar"><div><div class="eyebrow">${safe(account.scope || account.role.toUpperCase())} WORKSPACE</div><h1>${titles[account.role]}</h1></div><form data-form="logout"><button>Sign out</button></form></div>
   <p id="live-message" role="status">${receipt ? 'Report submitted. Reference: '+safe(receipt) : ''}</p>
-  ${work}<section class="panel"><h2>${account.role==='shopper'?'Your reports':'Report queue'}</h2>${reportCards(reports)}</section>${account.role==='operator' ? companyApplications(applications) : ''}`
+  ${work}${usesReportQueue() ? reportQueue(reports,before) : `<section class="panel"><h2>${account.role==='shopper'?'Your reports':'Report queue'}</h2>${reportCards(reports)}</section>`}${account.role==='operator' ? companyApplications(applications) : ''}`
+  queueCursor = before
 }
 main.addEventListener('click',async event=>{
   if (!event.target.closest('[data-camera]')) return
@@ -119,24 +131,35 @@ window.addEventListener('pagehide',stopCamera)
 main.addEventListener('submit',async event=>{
   event.preventDefault()
   const form = event.target
+  const lockQueue = usesReportQueue()
+  if (lockQueue && queueBusy) return
   const button = event.submitter
   const values = Object.fromEntries(new FormData(form))
   if (button) button.disabled = true
+  if (lockQueue) queueBusy = true
   try {
     const action = form.dataset.form
     if (['login','register'].includes(action)) {
       account=await api(action,values)
       history.replaceState(null,'','/live')
     }
-    if (action==='logout') {await api('logout',{});account=null;result=null;receipt=null}
+    if (action==='logout') {await api('logout',{});account=null;result=null;receipt=null;queueCursor=null}
     if (action==='check') result=await api('check',values)
     if (action==='batches') await api('batches',{...values,count:Number(values.count)})
     if (action==='report') receipt=(await api('reports',{...values,code:result.code})).id
     if (['refer','acknowledge'].includes(action)) await api('report-action',{...values,action})
+    if (action==='report-page') {
+      await render(values.before || null)
+      main.querySelector('#report-queue-heading')?.focus()
+      return
+    }
     await render()
   } catch(error) {
     document.querySelector('#live-message').textContent=error.message
-  } finally { if (button) button.disabled=false }
+  } finally {
+    if (lockQueue) queueBusy = false
+    if (button) button.disabled=false
+  }
 })
 try { account=(await api('session')).account; await render() }
 catch { main.textContent='Could not load the workspace. Refresh to try again.' }

@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 const id = () => randomBytes(16).toString('hex')
 const hash = value => createHash('sha256').update(value).digest('hex')
 const days = 1000 * 60 * 60 * 24
+const queuePageSize = 25
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }) }
 const email = value => {
   if (typeof value !== 'string' || value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) fail(400, 'Enter a valid email.')
@@ -67,6 +68,7 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     );
     CREATE INDEX IF NOT EXISTS report_shopper ON report(shopper,created);
     CREATE INDEX IF NOT EXISTS report_agency ON report(agency,created);
+    CREATE INDEX IF NOT EXISTS report_queue ON report(created,id);
   `)
   const get = (sql, ...args) => db.prepare(sql).get(...args)
   const all = (sql, ...args) => db.prepare(sql).all(...args)
@@ -169,6 +171,27 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       if (method === 'POST' && pathname === '/api/logout') {
         if (token) run('DELETE FROM session WHERE token=?',hash(token))
         return send(200,{}, {'Set-Cookie':cookie('',0)})
+      }
+      if (method === 'GET' && pathname === '/api/report-queue') {
+        requireRole('operator','regulator')
+        const before = new URL(req.url,'http://localhost').searchParams.get('before')
+        const agency = actor.role === 'regulator' ? [actor.scope] : []
+        const scope = agency.length ? ' AND r.agency=?' : ''
+        let boundary = []
+        if (before !== null) {
+          if (!/^[0-9a-f]{32}$/.test(before)) fail(400,'Invalid report queue cursor.')
+          const cursor = get('SELECT r.created,r.id FROM report r WHERE r.id=?'+scope,before,...agency)
+          if (!cursor) fail(404,'Report queue cursor not found.')
+          boundary = [cursor.created,cursor.id]
+        }
+        const reports = all(`
+          SELECT r.id,r.code,r.area,r.reason,r.created,r.agency,r.stage,b.product,b.lot
+          FROM report r LEFT JOIN pack p ON r.code=p.code LEFT JOIN batch b ON b.id=p.batch_id
+          WHERE 1=1${scope}${boundary.length ? ' AND (r.created,r.id)<(?,?)' : ''}
+          ORDER BY r.created DESC,r.id DESC LIMIT ?
+        `,...agency,...boundary,queuePageSize+1)
+        const next = reports.length > queuePageSize ? reports[queuePageSize-1].id : null
+        return send(200,{reports:reports.slice(0,queuePageSize),next})
       }
       if (pathname === '/api/batches') {
         requireRole('manufacturer')
