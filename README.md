@@ -44,6 +44,15 @@ Use the same working directory and `VERIFI_DB` setting for provisioning and serv
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 
 
+## Reviewing older cases
+
+Operators and regulators can choose **Show older reports** in the live report
+queue, then **Show newest reports** to return. The queue shows up to 25 reports
+per page. Operators see all reports. Regulators see only reports assigned to
+their agency. A referral or acknowledgement refreshes the current page. The
+queue reflects current assignments as you page. Return to the newest page to
+see new reports at the top.
+
 ## Public site and company onboarding
 
 Home (`/`) shows aggregate activity from the live database. Product checks are counted
