@@ -1,6 +1,23 @@
 const main = document.querySelector('#live')
 const safe = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const date = value => safe(value?.slice(0,10))
+const packSerial = /^VF-[A-F0-9]{32}$/i
+const linkedCode = (fragment = '') => {
+  const code = fragment.slice('#pack='.length)
+  return fragment.startsWith('#pack=') && packSerial.test(code) ? code.toUpperCase() : ''
+}
+const pendingPack = () => linkedCode(window.location?.hash)
+
+function scannedCode(value) {
+  const raw = value.trim()
+  if (/^[-A-Z0-9_]{1,100}$/i.test(raw)) return raw.toUpperCase()
+  try {
+    const url = new URL(raw)
+    return url.origin === location.origin && url.pathname === '/live' && !url.username && !url.password && !url.search
+      ? linkedCode(url.hash) : ''
+  } catch { return '' }
+}
+
 let account, result, receipt, cameraStream, openingCamera
 const titles = {shopper:'Check a pack',manufacturer:'Issue pack codes',operator:'Investigate reports',regulator:'Review referrals'}
 
@@ -15,14 +32,15 @@ async function api(path, body) {
 function authScreen() {
   const register = new URLSearchParams(location.search).get('mode') === 'register'
   const title = register ? 'Create a shopper account' : 'Sign in to Verifi'
+  const pack = pendingPack()
   return `<div class="screen-head"><div><div class="eyebrow">VERIFI ACCOUNT</div><h1>${title}</h1>
   <p class="intro">${register ? 'Check pack codes, submit concerns and track your reports.' : 'Use the email and password for your Verifi account.'}</p></div></div>
-  <section class="panel narrow"><form data-form="${register ? 'register' : 'login'}">
+  <section class="panel narrow">${pack ? '<p>Your pack code is ready. Continue with a shopper account to check it.</p>' : ''}<form data-form="${register ? 'register' : 'login'}">
   <label>Email<input name="email" type="email" maxlength="254" autocomplete="username" required></label>
   <label>Password<input name="password" type="password" ${register ? 'minlength="12"' : ''} maxlength="128" autocomplete="${register ? 'new-password' : 'current-password'}" required></label>
   ${register ? '<p class="muted">Use at least 12 characters.</p>' : ''}
   <button class="primary">${register ? 'Create account' : 'Sign in'}</button></form>
-  <p><a href="/live?mode=${register ? 'login' : 'register'}">${register ? 'Already registered? Sign in' : 'Create a shopper account'}</a></p>
+  <p><a href="/live?mode=${register ? 'login' : 'register'}${pack ? '#pack=' + pack : ''}">${register ? 'Already registered? Sign in' : 'Create a shopper account'}</a></p>
   <p><a href="/#companies">Register a company or product</a></p></section>`
 }
 
@@ -38,7 +56,9 @@ function companyApplications(applications) {
 }
 
 function checkResult() {
-  if (!result) return '<div class="blank"><strong>Waiting for a pack code</strong><p>Enter the serial printed on the pack.</p></div>'
+  if (!result) return pendingPack()
+    ? '<div class="blank"><strong>Ready to check</strong><p>Select Check code to look up the pack record.</p></div>'
+    : '<div class="blank"><strong>Waiting for a pack code</strong><p>Enter the serial printed on the pack.</p></div>'
   const statuses = {
     matched:['green','Pack code matched','A manufacturer-issued code matched a record. Compare the product details with the label.'],
     expired:['red','Expiry date passed','The expiry date recorded by the manufacturer has passed.'],
@@ -73,8 +93,8 @@ async function render() {
     account.role==='operator' ? api('company-applications') : []
   ])
   let work = ''
-  if (account.role==='shopper') work = `<div class="split"><section class="panel"><h2>Pack lookup</h2><form data-form="check"><label>Pack code<input name="code" maxlength="100" value="${safe(result?.code)}" required></label><button class="primary">Check code</button></form><div class="actions"><button data-camera>Scan QR code</button></div><video hidden playsinline muted></video></section><section class="panel"><h2>Verification result</h2>${checkResult()}</section></div>`
-  if (account.role==='manufacturer') work = `<div class="split"><section class="panel"><h2>Register a batch</h2><form data-form="batches"><label>Product<input name="product" maxlength="100" required></label><label>Lot<input name="lot" maxlength="80" required></label><div class="pair"><label>Expiry date<input name="expires" type="date" required></label><label>Pack count<input name="count" type="number" min="1" max="100" value="1" required></label></div><button class="primary">Issue pack codes</button></form></section><section class="panel"><h2>Issued pack labels</h2>${batches.length ? `<div class="table-wrap"><table><thead><tr><th>Product / lot</th><th>Label</th></tr></thead><tbody>${batches.map(b=>`<tr><td>${safe(b.product)}<br>${safe(b.lot)}</td><td><a class="label-link" href="/qr?code=${encodeURIComponent(b.code)}" download="${safe(b.code)}.svg">${safe(b.code)} ↓</a></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Your issued codes will appear here.</p>'}</section></div>`
+  if (account.role==='shopper') work = `<div class="split"><section class="panel"><h2>Pack lookup</h2><form data-form="check"><label>Pack code<input name="code" maxlength="100" autocomplete="off" autocapitalize="characters" spellcheck="false" value="${safe(result?.code || pendingPack())}" required></label><button class="primary">Check code</button></form><div class="actions"><button data-camera>Scan QR code</button></div><video hidden playsinline muted></video></section><section class="panel"><h2>Verification result</h2>${checkResult()}</section></div>`
+  if (account.role==='manufacturer') work = `<div class="split"><section class="panel"><h2>Register a batch</h2><form data-form="batches"><label>Product<input name="product" maxlength="100" required></label><label>Lot<input name="lot" maxlength="80" required></label><div class="pair"><label>Expiry date<input name="expires" type="date" required></label><label>Pack count<input name="count" type="number" min="1" max="100" value="1" required></label></div><button class="primary">Issue pack codes</button></form></section><section class="panel"><h2>Issued pack labels</h2>${batches.length ? `<div class="table-wrap"><table><thead><tr><th>Product / lot</th><th>Label</th></tr></thead><tbody>${batches.map(b=>`<tr><td>${safe(b.product)}<br>${safe(b.lot)}</td><td><a class="label-link" href="/qr?format=pack-link&amp;code=${encodeURIComponent(b.code)}" download="${safe(b.code)}.svg">${safe(b.code)} ↓</a></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Your issued codes will appear here.</p>'}</section></div>`
   main.innerHTML=`<div class="case-toolbar"><div><div class="eyebrow">${safe(account.scope || account.role.toUpperCase())} WORKSPACE</div><h1>${titles[account.role]}</h1></div><form data-form="logout"><button>Sign out</button></form></div>
   <p id="live-message" role="status">${receipt ? 'Report submitted. Reference: '+safe(receipt) : ''}</p>
   ${work}<section class="panel"><h2>${account.role==='shopper'?'Your reports':'Report queue'}</h2>${reportCards(reports)}</section>${account.role==='operator' ? companyApplications(applications) : ''}`
@@ -105,8 +125,13 @@ main.addEventListener('click',async event=>{
         if (cameraStream!==stream) return
         if (match) {
           stopCamera()
+          const code = scannedCode(match.rawValue)
+          if (!code) {
+            message.textContent='This QR code is not a Verifi pack label for this site. Try another label or enter the printed serial.'
+            return
+          }
           const form=main.querySelector('[data-form="check"]')
-          form.elements.code.value=match.rawValue
+          form.elements.code.value=code
           form.requestSubmit()
         } else setTimeout(read,200)
       } catch {stopCamera();message.textContent='Could not read the camera. Enter the pack code manually.'}
@@ -116,6 +141,7 @@ main.addEventListener('click',async event=>{
   finally {openingCamera=false}
 })
 window.addEventListener('pagehide',stopCamera)
+window.addEventListener('hashchange',()=>{ if (pendingPack()) location.reload() })
 main.addEventListener('submit',async event=>{
   event.preventDefault()
   const form = event.target
@@ -126,14 +152,23 @@ main.addEventListener('submit',async event=>{
     const action = form.dataset.form
     if (['login','register'].includes(action)) {
       account=await api(action,values)
+      const pack = account.role === 'shopper' ? pendingPack() : ''
+      history.replaceState(null,'','/live' + (pack ? '#pack=' + pack : ''))
+    }
+    if (action==='logout') {
+      await api('logout',{})
+      account=null;result=null;receipt=null
       history.replaceState(null,'','/live')
     }
-    if (action==='logout') {await api('logout',{});account=null;result=null;receipt=null}
-    if (action==='check') result=await api('check',values)
+    if (action==='check') {
+      result=await api('check',values)
+      if (pendingPack()) history.replaceState(null,'','/live')
+    }
     if (action==='batches') await api('batches',{...values,count:Number(values.count)})
     if (action==='report') receipt=(await api('reports',{...values,code:result.code})).id
     if (['refer','acknowledge'].includes(action)) await api('report-action',{...values,action})
     await render()
+    if (['login','register'].includes(action) && pendingPack()) main.querySelector('[data-form="check"] button')?.focus()
   } catch(error) {
     document.querySelector('#live-message').textContent=error.message
   } finally { if (button) button.disabled=false }

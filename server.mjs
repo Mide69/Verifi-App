@@ -14,8 +14,12 @@ createServer(async (req, res) => {
   if (url.pathname === '/qr') {
     const code = url.searchParams.get('code') || ''
     if (!/^[-A-Z0-9_]{1,100}$/.test(code)) { res.writeHead(400).end('Invalid pack serial'); return }
+    const packLink = url.searchParams.get('format') === 'pack-link'
+    if (packLink && !/^VF-[A-F0-9]{32}$/.test(code)) { res.writeHead(400).end('Invalid pack serial'); return }
     try {
-      const svg = await QRCode.toString(code, { type: 'svg', errorCorrectionLevel: 'M' })
+      const origin = process.env.VERIFI_ORIGIN || `http://localhost:${req.socket.localPort}`
+      const payload = packLink ? new URL(`/live#pack=${code}`, origin).href : code
+      const svg = await QRCode.toString(payload, { type: 'svg', errorCorrectionLevel: 'M' })
       res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'X-Content-Type-Options': 'nosniff' }).end(svg)
     } catch { res.writeHead(500).end('Could not generate label') }
     return

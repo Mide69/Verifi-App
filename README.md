@@ -43,6 +43,12 @@ Use the same working directory and `VERIFI_DB` setting for provisioning and serv
 
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 
+### Printing live pack labels
+
+Download live QR labels from the manufacturer workspace. They open the shopper workspace with the serial already filled in. Shoppers sign in or create a shopper account, then select **Check code**. A camera app that opens QR links can start this flow without granting camera access to the website. Keep the human-readable `VF-` serial next to the QR code. Existing serial-only labels still work with the in-app scanner or manual entry.
+
+Before printing labels for phones, set `VERIFI_ORIGIN` to the stable HTTPS origin that those phones can reach. Verify a sample label at the intended print size with the target phones. Without this setting, downloaded live labels point to `localhost` on the server port for same-device testing. Keep the printed origin reachable while labels are in circulation. The demo still produces serial-only labels.
+
 
 ## Public site and company onboarding
 
