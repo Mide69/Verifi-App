@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 const id = () => randomBytes(16).toString('hex')
 const hash = value => createHash('sha256').update(value).digest('hex')
 const days = 1000 * 60 * 60 * 24
+const agencies = ['NAFDAC','SON']
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }) }
 const email = value => {
   if (typeof value !== 'string' || value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) fail(400, 'Enter a valid email.')
@@ -80,7 +81,7 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
   function provision(address, password, role = 'shopper', scope = '') {
     address = email(address)
     if (!['shopper','manufacturer','operator','regulator'].includes(role)) fail(400, 'Unknown role.')
-    if (role === 'regulator' && !['NAFDAC','SON'].includes(scope)) fail(400, 'Choose a supported agency.')
+    if (role === 'regulator' && !agencies.includes(scope)) fail(400, 'Choose a supported agency.')
     if (role === 'manufacturer') scope = text(scope, 100)
     if (typeof password !== 'string' || password.length < 12 || password.length > 128) fail(400, 'Use a password of 12 to 128 characters.')
     const salt = id()
@@ -217,12 +218,19 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         const report = text(body.id,32)
         atomic(()=>{
           const at = new Date().toISOString()
-          if (actor.role==='operator' && body.action==='refer' && ['NAFDAC','SON'].includes(body.agency)) {
+          let auditAction = body.action
+          if (actor.role==='operator' && body.action==='refer' && agencies.includes(body.agency)) {
             if (!run("UPDATE report SET agency=?,stage='referred' WHERE id=? AND stage='submitted'",body.agency,report).changes) fail(409,'Report cannot be referred.')
+          } else if (actor.role==='operator' && body.action==='reroute') {
+            const {previousAgency, agency} = body
+            if (!agencies.includes(previousAgency) || !agencies.includes(agency) || previousAgency===agency) fail(400,'Choose a different supported agency.')
+            const changed = run("UPDATE report SET agency=? WHERE id=? AND agency=? AND stage='referred'",agency,report,previousAgency)
+            if (!changed.changes) fail(409,'This referral has changed or cannot be moved. Refresh the report queue.')
+            auditAction = `rerouted:${previousAgency}->${agency}`
           } else if (actor.role==='regulator' && body.action==='acknowledge') {
             if (!run("UPDATE report SET stage='acknowledged' WHERE id=? AND agency=? AND stage='referred'",report,actor.scope).changes) fail(409,'Report cannot be acknowledged.')
           } else fail(403,'Action unavailable.')
-          run('INSERT INTO audit VALUES (?,?,?,?,?)',id(),actor.id,report,body.action,at)
+          run('INSERT INTO audit VALUES (?,?,?,?,?)',id(),actor.id,report,auditAction,at)
         })
         return send(200,{})
       }
