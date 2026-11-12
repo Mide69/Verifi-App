@@ -39,7 +39,7 @@ Read-Host -MaskInput 'Operator password' | node provision.mjs operator operator@
 Read-Host -MaskInput 'Regulator password' | node provision.mjs regulator regulator@example.test NAFDAC
 ```
 
-Use the same working directory and `VERIFI_DB` setting for provisioning and serving. Manufacturer accounts have individually scoped catalogues. The operator chooses the referral agency, and only a regulator account provisioned for that agency can acknowledge the referral. A code match means the issued serial exists in Verifi. The workspace has no live registration or government integration.
+Use the same working directory and `VERIFI_DB` setting for provisioning and serving. Manufacturer accounts have individually scoped catalogues. The operator chooses the referral agency, and only a regulator account provisioned for that agency can acknowledge the referral. Until acknowledgement, an operator can correct the assignment. Verifi records both agencies in the audit log and removes the report from the previous agency's queue. A code match means the issued serial exists in Verifi. The workspace has no live registration or government integration.
 
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 

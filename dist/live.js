@@ -3,6 +3,7 @@ const safe = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','
 const date = value => safe(value?.slice(0,10))
 let account, result, receipt, cameraStream, openingCamera
 const titles = {shopper:'Check a pack',manufacturer:'Issue pack codes',operator:'Investigate reports',regulator:'Review referrals'}
+const agencies = ['NAFDAC','SON']
 
 async function api(path, body) {
   const response = await fetch('/api/' + path, body === undefined ? {} : {
@@ -52,10 +53,21 @@ function checkResult() {
   <button class="primary">Submit report</button></form></details>`
 }
 
+function referralControls(report) {
+  if (account.role !== 'operator') return ''
+  const {id,stage,agency} = report
+  if (stage === 'submitted') return `<form data-form="refer"><input name="id" type="hidden" value="${safe(id)}"><label>Agency<select name="agency">${agencies.map(name=>`<option>${name}</option>`).join('')}</select></label><button>Refer case</button></form>`
+  if (stage !== 'referred' || !agencies.includes(agency)) return ''
+  return `<form data-form="reroute"><input name="id" type="hidden" value="${safe(id)}"><input name="previousAgency" type="hidden" value="${agency}">
+  <label>Correct assigned agency<select name="agency" required><option value="">Choose an agency</option>${agencies.filter(name=>name!==agency).map(name=>`<option>${name}</option>`).join('')}</select></label>
+  <button>Move referral</button></form>`
+}
+
 function reportCards(reports) {
   return reports.length ? reports.map(r=>`<article><div class="case-head"><div><small>${date(r.created)} · ${safe(r.id)}</small><h3>${safe(r.product || r.code)}</h3></div><span class="badge">${safe(r.stage)}</span></div>
   <p>${safe(r.area)}${r.lot ? ' · Lot ' + safe(r.lot) : ''} · ${safe(r.code)}</p><p>${safe(r.reason)}</p>
-  ${account.role==='operator' && r.stage==='submitted' ? `<form data-form="refer"><input name="id" type="hidden" value="${safe(r.id)}"><label>Agency<select name="agency"><option>NAFDAC</option><option>SON</option></select></label><button>Refer case</button></form>` : ''}
+  ${r.agency && account.role==='operator' ? `<p>Assigned to ${safe(r.agency)}</p>` : ''}
+  ${referralControls(r)}
   ${account.role==='regulator' && r.stage==='referred' ? `<form data-form="acknowledge"><input name="id" type="hidden" value="${safe(r.id)}"><button>Acknowledge case</button></form>` : ''}</article>`).join('') : '<p class="empty">No reports in this workspace yet.</p>'
 }
 function stopCamera() {
@@ -132,8 +144,14 @@ main.addEventListener('submit',async event=>{
     if (action==='check') result=await api('check',values)
     if (action==='batches') await api('batches',{...values,count:Number(values.count)})
     if (action==='report') receipt=(await api('reports',{...values,code:result.code})).id
-    if (['refer','acknowledge'].includes(action)) await api('report-action',{...values,action})
+    if (['refer','reroute','acknowledge'].includes(action)) await api('report-action',{...values,action})
     await render()
+    if (action==='reroute') {
+      const message = document.querySelector('#live-message')
+      message.textContent = `Report ${values.id} moved to ${values.agency}.`
+      message.tabIndex = -1
+      message.focus()
+    }
   } catch(error) {
     document.querySelector('#live-message').textContent=error.message
   } finally { if (button) button.disabled=false }
