@@ -90,6 +90,14 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
   }
 
   const limits = new Map()
+  const guestCheckLimits = new Map()
+  function limitRequests(buckets, ip, maximum) {
+    const now = Date.now()
+    for (const [key, value] of buckets) if (value.until <= now) buckets.delete(key)
+    const limit = buckets.get(ip) || {until:now + 60000,count:0}
+    if (++limit.count > maximum) fail(429,'Too many attempts. Try again in a minute.')
+    buckets.set(ip,limit)
+  }
   const secure = process.env.VERIFI_SECURE_COOKIE === '1'
   const cookieName = secure ? '__Host-verifi' : 'verifi_session'
   const cookie = (token, age) => `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure ? '; Secure' : ''}`
@@ -133,12 +141,7 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         return send(200,all('SELECT * FROM company_application ORDER BY created DESC LIMIT 200'))
       }
       if (method === 'POST' && ['/api/register','/api/login','/api/company-applications'].includes(pathname)) {
-        const ip = req.socket.remoteAddress
-        const now = Date.now()
-        for (const [key, value] of limits) if (value.until <= now) limits.delete(key)
-        const limit = limits.get(ip) || {until:now + 60000,count:0}
-        if (++limit.count > 10) fail(429,'Too many attempts. Try again in a minute.')
-        limits.set(ip,limit)
+        limitRequests(limits,req.socket.remoteAddress,10)
         if (pathname === '/api/company-applications') {
           const reference = id()
           try {
@@ -189,7 +192,8 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
         } catch(error) { if(error.errcode === 2067) fail(409,'This product and lot already exist.'); throw error }
       }
       if (method === 'POST' && pathname === '/api/check') {
-        requireRole('shopper')
+        if (actor) requireRole('shopper')
+        else limitRequests(guestCheckLimits,req.socket.remoteAddress,30)
         const code = text(body.code,100).toUpperCase()
         const record = get('SELECT b.product,b.lot,b.expires,a.scope AS manufacturer FROM pack p JOIN batch b ON b.id=p.batch_id JOIN account a ON a.id=b.issuer WHERE p.code=?',code)
         run("UPDATE public_counter SET total=total+1 WHERE name='checks'")

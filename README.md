@@ -41,13 +41,15 @@ Read-Host -MaskInput 'Regulator password' | node provision.mjs regulator regulat
 
 Use the same working directory and `VERIFI_DB` setting for provisioning and serving. Manufacturer accounts have individually scoped catalogues. The operator chooses the referral agency, and only a regulator account provisioned for that agency can acknowledge the referral. A code match means the issued serial exists in Verifi. The workspace has no live registration or government integration.
 
+Shoppers can check a pack without an account. The result shows the matching pack's manufacturer name, product, lot and expiry. Submitting and viewing reports requires a shopper account. The result stays available while the shopper signs in or registers on the same page, until they reload or leave it. Guest checks are limited to 30 attempts per minute per socket IP, per server process. Behind a reverse proxy, clients may share that limit. Configure per-client abuse controls at the trusted edge and validate the shared limit before wider rollout.
+
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 
 
 ## Public site and company onboarding
 
-Home (`/`) shows aggregate activity from the live database. Product checks are counted
-from this release onward. The sample environment is at `/demo` and its actions do
+Home (`/`) shows aggregate activity from the live database. Product checks include
+guest and signed-in lookups, including unknown codes and repeated checks. The sample environment is at `/demo` and its actions do
 not affect live totals. Shopper signup and sign-in use separate forms.
 
 The company form creates a private application and returns a reference. Operators

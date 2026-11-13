@@ -2,6 +2,8 @@ const main = document.querySelector('#live')
 const safe = value => String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const date = value => safe(value?.slice(0,10))
 let account, result, receipt, cameraStream, openingCamera
+let mode = new URLSearchParams(location.search).get('mode')
+let reporting = false
 const titles = {shopper:'Check a pack',manufacturer:'Issue pack codes',operator:'Investigate reports',regulator:'Review referrals'}
 
 async function api(path, body) {
@@ -13,16 +15,17 @@ async function api(path, body) {
   return data
 }
 function authScreen() {
-  const register = new URLSearchParams(location.search).get('mode') === 'register'
+  const register = mode === 'register'
   const title = register ? 'Create a shopper account' : 'Sign in to Verifi'
   return `<div class="screen-head"><div><div class="eyebrow">VERIFI ACCOUNT</div><h1>${title}</h1>
-  <p class="intro">${register ? 'Check pack codes, submit concerns and track your reports.' : 'Use the email and password for your Verifi account.'}</p></div></div>
+  <p class="intro">${reporting ? 'Your pack check is ready. Continue to submit and track your report.' : register ? 'Create an account to submit concerns and track your reports.' : 'Use the email and password for your Verifi account.'}</p></div></div>
   <section class="panel narrow"><form data-form="${register ? 'register' : 'login'}">
   <label>Email<input name="email" type="email" maxlength="254" autocomplete="username" required></label>
   <label>Password<input name="password" type="password" ${register ? 'minlength="12"' : ''} maxlength="128" autocomplete="${register ? 'new-password' : 'current-password'}" required></label>
   ${register ? '<p class="muted">Use at least 12 characters.</p>' : ''}
   <button class="primary">${register ? 'Create account' : 'Sign in'}</button></form>
-  <p><a href="/live?mode=${register ? 'login' : 'register'}">${register ? 'Already registered? Sign in' : 'Create a shopper account'}</a></p>
+  <div class="actions"><button type="button" data-mode="${register ? 'login' : 'register'}">${register ? 'Already registered? Sign in' : 'Create a shopper account'}</button>
+  <button type="button" data-mode="check">${result ? 'Back to pack result' : 'Check a pack'}</button></div>
   <p><a href="/#companies">Register a company or product</a></p></section>`
 }
 
@@ -45,11 +48,15 @@ function checkResult() {
     unknown:['amber','Code not found','Verifi has no manufacturer record for this code. Check the label or report a concern.']
   }
   const [tone,title,detail] = statuses[result.status]
-  return `<div class="status ${tone}">${title}</div><p>${detail}</p>${result.product ? `<dl><dt>Product</dt><dd>${safe(result.product)}</dd><dt>Manufacturer</dt><dd>${safe(result.manufacturer)}</dd><dt>Lot</dt><dd>${safe(result.lot)}</dd><dt>Expiry</dt><dd>${date(result.expires)}</dd></dl>` : ''}
-  <details><summary>Report a concern</summary><form data-form="report">
+  return `<div id="verification-status" class="status ${tone}">${title}</div><p>${detail}</p>${result.product ? `<dl><dt>Product</dt><dd>${safe(result.product)}</dd><dt>Manufacturer</dt><dd>${safe(result.manufacturer)}</dd><dt>Lot</dt><dd>${safe(result.lot)}</dd><dt>Expiry</dt><dd>${date(result.expires)}</dd></dl>` : ''}
+  ${!account ? '<div class="actions"><button type="button" data-mode="login" data-report>Sign in to report a concern</button><button type="button" data-mode="register" data-report>Create a shopper account</button></div>' : `<details${reporting ? ' open' : ''}><summary>Report a concern</summary><form data-form="report">
   <label>Area or shop location<input name="area" maxlength="120" required></label>
   <label>What did you notice?<textarea name="reason" maxlength="1000" required></textarea></label>
-  <button class="primary">Submit report</button></form></details>`
+  <button class="primary">Submit report</button></form></details>`}`
+}
+
+function packLookup() {
+  return `<div class="split"><section class="panel"><h2>Pack lookup</h2><form data-form="check"><label>Pack code<input name="code" maxlength="100" autocapitalize="characters" spellcheck="false" value="${safe(result?.code)}" required></label><button class="primary">Check code</button></form><div class="actions"><button data-camera>Scan QR code</button></div><video hidden playsinline muted></video></section><section class="panel"><h2 id="verification-result" tabindex="-1"${result ? ' aria-describedby="verification-status"' : ''}>Verification result</h2>${checkResult()}</section></div>`
 }
 
 function reportCards(reports) {
@@ -66,20 +73,35 @@ function stopCamera() {
 }
 async function render() {
   stopCamera()
-  if (!account) {main.innerHTML=authScreen()+'<p id="live-message" role="status"></p>';return}
+  if (!account) {
+    const content = mode === 'login' || mode === 'register' ? authScreen() : `<div class="case-toolbar"><h1>Check a pack</h1><button type="button" data-mode="login">Sign in</button></div>`
+    main.innerHTML = content + '<p id="live-message" role="status"></p>' + (mode === 'login' || mode === 'register' ? '' : packLookup())
+    return
+  }
   const [reports,batches,applications] = await Promise.all([
     api('reports'),
     account.role==='manufacturer' ? api('batches') : [],
     account.role==='operator' ? api('company-applications') : []
   ])
   let work = ''
-  if (account.role==='shopper') work = `<div class="split"><section class="panel"><h2>Pack lookup</h2><form data-form="check"><label>Pack code<input name="code" maxlength="100" value="${safe(result?.code)}" required></label><button class="primary">Check code</button></form><div class="actions"><button data-camera>Scan QR code</button></div><video hidden playsinline muted></video></section><section class="panel"><h2>Verification result</h2>${checkResult()}</section></div>`
+  if (account.role==='shopper') work = packLookup()
   if (account.role==='manufacturer') work = `<div class="split"><section class="panel"><h2>Register a batch</h2><form data-form="batches"><label>Product<input name="product" maxlength="100" required></label><label>Lot<input name="lot" maxlength="80" required></label><div class="pair"><label>Expiry date<input name="expires" type="date" required></label><label>Pack count<input name="count" type="number" min="1" max="100" value="1" required></label></div><button class="primary">Issue pack codes</button></form></section><section class="panel"><h2>Issued pack labels</h2>${batches.length ? `<div class="table-wrap"><table><thead><tr><th>Product / lot</th><th>Label</th></tr></thead><tbody>${batches.map(b=>`<tr><td>${safe(b.product)}<br>${safe(b.lot)}</td><td><a class="label-link" href="/qr?code=${encodeURIComponent(b.code)}" download="${safe(b.code)}.svg">${safe(b.code)} ↓</a></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">Your issued codes will appear here.</p>'}</section></div>`
   main.innerHTML=`<div class="case-toolbar"><div><div class="eyebrow">${safe(account.scope || account.role.toUpperCase())} WORKSPACE</div><h1>${titles[account.role]}</h1></div><form data-form="logout"><button>Sign out</button></form></div>
   <p id="live-message" role="status">${receipt ? 'Report submitted. Reference: '+safe(receipt) : ''}</p>
   ${work}<section class="panel"><h2>${account.role==='shopper'?'Your reports':'Report queue'}</h2>${reportCards(reports)}</section>${account.role==='operator' ? companyApplications(applications) : ''}`
 }
 main.addEventListener('click',async event=>{
+  const navigation = event.target.closest('[data-mode]')
+  if (navigation) {
+    mode = navigation.dataset.mode
+    reporting = mode !== 'check' && (reporting || navigation.hasAttribute('data-report'))
+    history.replaceState(null,'',mode === 'check' ? '/live' : '/live?mode=' + mode)
+    await render()
+    const heading = main.querySelector(mode === 'check' && result ? '#verification-result' : 'h1')
+    heading?.setAttribute('tabindex','-1')
+    heading?.focus()
+    return
+  }
   if (!event.target.closest('[data-camera]')) return
   const message = document.querySelector('#live-message')
   if (cameraStream) { stopCamera(); return }
@@ -128,12 +150,18 @@ main.addEventListener('submit',async event=>{
       account=await api(action,values)
       history.replaceState(null,'','/live')
     }
-    if (action==='logout') {await api('logout',{});account=null;result=null;receipt=null}
-    if (action==='check') result=await api('check',values)
+    if (action==='logout') {
+      await api('logout',{})
+      account=null;result=null;receipt=null;mode=null;reporting=false
+      history.replaceState(null,'','/live')
+    }
+    if (action==='check') {result=await api('check',values);reporting=false}
     if (action==='batches') await api('batches',{...values,count:Number(values.count)})
-    if (action==='report') receipt=(await api('reports',{...values,code:result.code})).id
+    if (action==='report') {receipt=(await api('reports',{...values,code:result.code})).id;reporting=false}
     if (['refer','acknowledge'].includes(action)) await api('report-action',{...values,action})
     await render()
+    if (action === 'check') main.querySelector('#verification-result')?.focus()
+    if (reporting && account?.role === 'shopper' && ['login','register'].includes(action)) main.querySelector('[data-form="report"] [name="area"]')?.focus()
   } catch(error) {
     document.querySelector('#live-message').textContent=error.message
   } finally { if (button) button.disabled=false }
