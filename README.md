@@ -41,7 +41,22 @@ Read-Host -MaskInput 'Regulator password' | node provision.mjs regulator regulat
 
 Use the same working directory and `VERIFI_DB` setting for provisioning and serving. Manufacturer accounts have individually scoped catalogues. The operator chooses the referral agency, and only a regulator account provisioned for that agency can acknowledge the referral. A code match means the issued serial exists in Verifi. The workspace has no live registration or government integration.
 
-This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
+This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, an operational backup schedule and rehearsed cutover, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
+
+## Workspace backup and recovery
+
+Run these commands on the host from the repository folder. Use the same `VERIFI_DB` setting as the running service for backup. Both destination directories must already exist, be restricted to the service administrator, and support hard links. Choose a new filename for each operation.
+
+```powershell
+node workspace-backup.mjs backup C:\VerifiBackups\pilot-2026-11-14.sqlite
+node workspace-backup.mjs restore C:\VerifiBackups\pilot-2026-11-14.sqlite C:\VerifiRecovery\recovered.sqlite
+```
+
+The SQLite backup reads committed data from the running database, including transactions still in the WAL. Both commands verify the copy's integrity, foreign keys and workspace tables before publishing a standalone file. The destination will never overwrite a database. Active sessions are removed from the copy, so restored users must sign in again. The running database and its sessions are unaffected.
+
+Backups contain password hashes and private shopper and company data. Use protected backup storage with encryption, restricted access and a retention policy. Keep a copy away from the service volume. A restore recovers the snapshot's point in time. Later reports, case changes and account revocations must be reconciled before access resumes.
+
+For a recovery drill, start the workspace privately against the restored path using `VERIFI_DB`. Verify a known pack, report reference and agency assignment, including that another agency cannot read the referral. Record the snapshot age and time to recover. For a real cutover, stop the old service and keep its database and sidecars intact for investigation. Validate the recovered database and reconcile account access and case changes before switching the service.
 
 
 ## Public site and company onboarding
