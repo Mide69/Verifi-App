@@ -54,10 +54,16 @@ test('issued pack, report, scoped referral and persistence', async t => {
   assert.equal((await call('company-applications',undefined,operator)).data[0].id,submittedApplication.data.reference)
 
   const batch={product:'Rice',lot:'A01',expires:'2099-01-01',count:2}
-  const issued=await call('batches',batch,manufacturer)
+  const submissions=await Promise.all(Array.from({length:5},()=>call('batches',batch,manufacturer)))
+  const [issued,...retries]=submissions.sort((first,second)=>second.status-first.status)
   assert.equal(issued.status,201)
   assert.equal(new Set(issued.data.codes).size,2)
-  assert.equal((await call('batches',batch,manufacturer)).status,409)
+  for (const retry of retries) {
+    assert.equal(retry.status,200)
+    assert.deepEqual(retry.data,issued.data)
+  }
+  assert.equal((await call('batches',{...batch,count:3},manufacturer)).status,409)
+  assert.equal((await call('batches',{...batch,expires:'2099-01-02'},manufacturer)).status,409)
   assert.deepEqual((await call('batches',undefined,other)).data,[])
   const [code]=issued.data.codes
   assert.equal((await call('check',{code},shopper)).data.status,'matched')
@@ -77,6 +83,11 @@ test('issued pack, report, scoped referral and persistence', async t => {
   assert.deepEqual((await call('public-stats')).data,{checks:2,shoppers:1,products:1,manufacturers:2,packs:2,reports:1})
   live.close()
   live=openLive(db)
+  assert.deepEqual((await call('batches',batch,manufacturer)).data,issued.data)
+  const independent=await call('batches',batch,other)
+  assert.equal(independent.status,201)
+  assert.notEqual(independent.data.id,issued.data.id)
+  assert.ok(independent.data.codes.every(code=>!issued.data.codes.includes(code)))
   assert.equal((await call('public-stats')).data.checks,2)
   assert.equal((await call('company-applications',undefined,operator)).data[0].company,'Pending Foods')
   assert.equal((await call('reports',undefined,shopper)).data[0].stage,'acknowledged')
