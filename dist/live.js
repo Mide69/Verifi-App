@@ -124,16 +124,23 @@ main.addEventListener('submit',async event=>{
   if (button) button.disabled = true
   try {
     const action = form.dataset.form
+    let issuedBatch
     if (['login','register'].includes(action)) {
       account=await api(action,values)
       history.replaceState(null,'','/live')
     }
     if (action==='logout') {await api('logout',{});account=null;result=null;receipt=null}
     if (action==='check') result=await api('check',values)
-    if (action==='batches') await api('batches',{...values,count:Number(values.count)})
+    if (action==='batches') issuedBatch=await api('batches',{...values,count:Number(values.count)})
     if (action==='report') receipt=(await api('reports',{...values,code:result.code})).id
     if (['refer','acknowledge'].includes(action)) await api('report-action',{...values,action})
     await render()
+    if (issuedBatch) {
+      const message = document.querySelector('#live-message')
+      message.textContent = `Labels for ${issuedBatch.product}, lot ${issuedBatch.lot}, are ready. Download them under Issued pack labels.`
+      message.tabIndex = -1
+      message.focus()
+    }
   } catch(error) {
     document.querySelector('#live-message').textContent=error.message
   } finally { if (button) button.disabled=false }

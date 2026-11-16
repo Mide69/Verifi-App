@@ -55,3 +55,9 @@ can view submissions in the live workspace. Verify the company and product detai
 before provisioning a manufacturer account using the existing CLI. The form does
 not grant access or send email. Approved manufacturers sign in to register batches
 and issue pack codes.
+
+If a batch submission loses its response, submit the same product, lot, expiry
+and pack count again to recover the original labels. Matching is scoped to the
+manufacturer account. Changing the expiry or count for an existing product and
+lot returns a conflict. Expired batches can return existing labels, while
+issuing a new batch requires a current or future expiry date.

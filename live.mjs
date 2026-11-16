@@ -173,20 +173,30 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       if (pathname === '/api/batches') {
         requireRole('manufacturer')
         if (method === 'GET') return send(200,all('SELECT b.*,p.code FROM batch b JOIN pack p ON b.id=p.batch_id WHERE issuer=? ORDER BY b.rowid DESC',actor.id))
-        const batch = {id:id(), product:text(body.product,100),lot:text(body.lot,80),expires:date(body.expires)}
+        const product = text(body.product,100)
+        const lot = text(body.lot,80)
+        const expires = date(body.expires)
         if (!Number.isInteger(body.count) || body.count < 1 || body.count > 100) fail(400,'Issue between 1 and 100 codes per batch.')
-        if (batch.expires < new Date().toISOString().slice(0,10)) fail(400,'Choose a current or future expiry date.')
-        try {
-          const codes = atomic(() => {
-            run('INSERT INTO batch VALUES (?,?,?,?,?)',batch.id,actor.id,batch.product,batch.lot,batch.expires)
-            return Array.from({length:body.count},()=>{
-              const code = 'VF-' + id().toUpperCase()
-              run('INSERT INTO pack VALUES (?,?)',code,batch.id)
-              return code
-            })
+        const {status, issued} = atomic(() => {
+          const existing = get('SELECT id,expires FROM batch WHERE issuer=? AND product=? AND lot=?',actor.id,product,lot)
+          if (existing) {
+            const codes = all('SELECT code FROM pack WHERE batch_id=? ORDER BY rowid',existing.id).map(pack=>pack.code)
+            if (existing.expires !== expires || codes.length !== body.count) {
+              fail(409,'This product and lot already exist with a different expiry or pack count.')
+            }
+            return {status:200,issued:{id:existing.id,product,lot,expires,codes}}
+          }
+          if (expires < new Date().toISOString().slice(0,10)) fail(400,'Choose a current or future expiry date.')
+          const batchId = id()
+          run('INSERT INTO batch VALUES (?,?,?,?,?)',batchId,actor.id,product,lot,expires)
+          const codes = Array.from({length:body.count},()=>{
+            const code = 'VF-' + id().toUpperCase()
+            run('INSERT INTO pack VALUES (?,?)',code,batchId)
+            return code
           })
-          return send(201,{...batch,codes})
-        } catch(error) { if(error.errcode === 2067) fail(409,'This product and lot already exist.'); throw error }
+          return {status:201,issued:{id:batchId,product,lot,expires,codes}}
+        })
+        return send(status,issued)
       }
       if (method === 'POST' && pathname === '/api/check') {
         requireRole('shopper')
