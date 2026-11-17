@@ -52,6 +52,9 @@ not affect live totals. Shopper signup and sign-in use separate forms.
 
 The company form creates a private application and returns a reference. Operators
 can view submissions in the live workspace. Verify the company and product details
-before provisioning a manufacturer account using the existing CLI. The form does
-not grant access or send email. Approved manufacturers sign in to register batches
-and issue pack codes.
+before recording an approval or decline with an internal note. Verifi retains the
+reviewer and timestamp, and identical retries return the original decision. A
+recorded decision cannot be changed in the workspace. The queue shows up to 200
+applications, with pending applications listed first. Approval records Verifi's
+onboarding decision. It does not send email, check a government registry or grant
+access. Use the existing CLI to provision the manufacturer account separately.

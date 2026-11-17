@@ -60,6 +60,12 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     CREATE TABLE IF NOT EXISTS public_counter (
       name TEXT PRIMARY KEY, total INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS company_application_decision (
+      application_id TEXT PRIMARY KEY NOT NULL REFERENCES company_application(id),
+      reviewer TEXT NOT NULL REFERENCES account(id),
+      decision TEXT NOT NULL CHECK(decision IN ('approved','declined')),
+      note TEXT NOT NULL, decided_at TEXT NOT NULL
+    );
     INSERT OR IGNORE INTO public_counter VALUES ('checks', 0);
     CREATE TABLE IF NOT EXISTS audit (
       id TEXT PRIMARY KEY, actor TEXT REFERENCES account(id) NOT NULL,
@@ -130,7 +136,32 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
       `))
       if (method === 'GET' && pathname === '/api/company-applications') {
         requireRole('operator')
-        return send(200,all('SELECT * FROM company_application ORDER BY created DESC LIMIT 200'))
+        return send(200,all(`
+          SELECT a.*, d.decision, d.note, d.decided_at
+          FROM company_application a
+          LEFT JOIN company_application_decision d ON d.application_id=a.id
+          ORDER BY d.decision IS NOT NULL, CASE WHEN d.decision IS NULL THEN a.created END,
+            d.decided_at DESC, a.id LIMIT 200
+        `))
+      }
+      if (method === 'POST' && pathname === '/api/company-application-decision') {
+        requireRole('operator')
+        const reference = text(body.id,32)
+        const {decision} = body
+        if (!['approved','declined'].includes(decision)) fail(400,'Choose a review decision.')
+        const note = text(body.note,500)
+        const saved = atomic(() => {
+          if (!get('SELECT id FROM company_application WHERE id=?',reference)) fail(404,'Application not found.')
+          const existing = get('SELECT decision,note,decided_at FROM company_application_decision WHERE application_id=?',reference)
+          if (existing) {
+            if (existing.decision !== decision || existing.note !== note) fail(409,'This application already has a review decision.')
+            return existing
+          }
+          const decidedAt = new Date().toISOString()
+          run('INSERT INTO company_application_decision VALUES (?,?,?,?,?)',reference,actor.id,decision,note,decidedAt)
+          return {decision,note,decided_at:decidedAt}
+        })
+        return send(200,saved)
       }
       if (method === 'POST' && ['/api/register','/api/login','/api/company-applications'].includes(pathname)) {
         const ip = req.socket.remoteAddress
