@@ -27,13 +27,23 @@ function authScreen() {
 }
 
 function companyApplications(applications) {
+  const decisionLabels = {approved:'Approved for onboarding',declined:'Declined'}
   return `<section class="panel"><h2>Company applications</h2>
-  <p>Verify company details before provisioning manufacturer access.</p>
+  <p>Verify company and product details before recording a decision. Approved applications still require separate account provisioning.</p>
   ${applications.length ? applications.map(application => `<article>
     <small>${date(application.created)} · ${safe(application.id)}</small>
     <h3>${safe(application.company)} · ${safe(application.product)}</h3>
     <p>Company registration ${safe(application.registration)} · ${safe(application.email)}</p>
     <p>Product regulatory reference ${safe(application.regulatory_reference || 'Not supplied')}</p>
+    ${application.decision
+      ? `<p><strong>${decisionLabels[application.decision]}</strong> · ${date(application.decided_at)}</p><p>${safe(application.note)}</p>`
+      : `<details><summary>Review ${safe(application.company)} application</summary>
+        <form data-form="company-application-decision">
+          <input type="hidden" name="id" value="${safe(application.id)}">
+          <label>Decision<select name="decision" required><option value="">Choose a decision</option><option value="approved">Approve for onboarding</option><option value="declined">Decline</option></select></label>
+          <label>Internal review note<textarea name="note" maxlength="500" required></textarea></label>
+          <button>Record decision</button>
+        </form></details>`}
   </article>`).join('') : '<p class="empty">No company applications received yet.</p>'}</section>`
 }
 
@@ -133,7 +143,14 @@ main.addEventListener('submit',async event=>{
     if (action==='batches') await api('batches',{...values,count:Number(values.count)})
     if (action==='report') receipt=(await api('reports',{...values,code:result.code})).id
     if (['refer','acknowledge'].includes(action)) await api('report-action',{...values,action})
+    if (action==='company-application-decision') await api(action,values)
     await render()
+    if (action==='company-application-decision') {
+      const message = document.querySelector('#live-message')
+      message.textContent = 'Company application decision recorded.'
+      message.tabIndex = -1
+      message.focus()
+    }
   } catch(error) {
     document.querySelector('#live-message').textContent=error.message
   } finally { if (button) button.disabled=false }
