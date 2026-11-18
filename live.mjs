@@ -21,6 +21,9 @@ const date = value => {
   return value
 }
 const digest = (password, salt) => scryptSync(password, salt, 64)
+const validatePassword = password => {
+  if (typeof password !== 'string' || password.length < 12 || password.length > 128) fail(400, 'Use a password of 12 to 128 characters.')
+}
 
 export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite') {
   if (path !== ':memory:') {
@@ -82,11 +85,24 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     if (!['shopper','manufacturer','operator','regulator'].includes(role)) fail(400, 'Unknown role.')
     if (role === 'regulator' && !['NAFDAC','SON'].includes(scope)) fail(400, 'Choose a supported agency.')
     if (role === 'manufacturer') scope = text(scope, 100)
-    if (typeof password !== 'string' || password.length < 12 || password.length > 128) fail(400, 'Use a password of 12 to 128 characters.')
+    validatePassword(password)
     const salt = id()
     const encrypted = digest(password, salt).toString('hex')
     try { run('INSERT INTO account VALUES (?,?,?,?,?,?)',id(),address,salt,encrypted,role,scope) }
     catch (error) { if (error.errcode === 2067) fail(409, 'Account could not be created.'); throw error }
+  }
+
+  function resetPassword(address, password) {
+    address = email(address)
+    validatePassword(password)
+    const salt = id()
+    const encrypted = digest(password,salt).toString('hex')
+    atomic(() => {
+      const account = get('SELECT id FROM account WHERE email=?',address)
+      if (!account) fail(404,'Account not found.')
+      run('UPDATE account SET salt=?,password=? WHERE id=?',salt,encrypted,account.id)
+      run('DELETE FROM session WHERE account_id=?',account.id)
+    })
   }
 
   const limits = new Map()
@@ -233,5 +249,5 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     }
   }
 
-  return {handle,provision,close:()=>db.close()}
+  return {handle,provision,resetPassword,close:()=>db.close()}
 }

@@ -41,6 +41,22 @@ Read-Host -MaskInput 'Regulator password' | node provision.mjs regulator regulat
 
 Use the same working directory and `VERIFI_DB` setting for provisioning and serving. Manufacturer accounts have individually scoped catalogues. The operator chooses the referral agency, and only a regulator account provisioned for that agency can acknowledge the referral. A code match means the issued serial exists in Verifi. The workspace has no live registration or government integration.
 
+An administrator with database access can replace an existing account's password
+after verifying the account holder through the agreed pilot support process.
+Run from the service folder with the same `VERIFI_DB` setting:
+
+```powershell
+Read-Host -MaskInput 'New password' | node reset-password.mjs user@example.test
+```
+
+The replacement uses the existing 12–128 character rule and revokes every session
+for that account in the same transaction. Users must sign in again. The account's
+identity, role, issued packs and reports are retained. Requests already executing
+may complete. Resetting a password preserves any disabled-account state when
+offboarding support is installed. Use a trusted channel to deliver the password
+and keep it out of command arguments and logs. This command is an administrative
+recovery mechanism. Verified email recovery and privileged MFA still need work.
+
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 
 
