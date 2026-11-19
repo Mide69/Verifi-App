@@ -57,6 +57,14 @@ offboarding support is installed. Use a trusted channel to deliver the password
 and keep it out of command arguments and logs. This command is an administrative
 recovery mechanism. Verified email recovery and privileged MFA still need work.
 
+Each successful reset adds an entry to `password_reset_audit` containing the
+target account ID, UTC timestamp and the operating-system username of the process
+that performed it. The entry is committed together with the credential update and
+session revocation. Shared service accounts identify the host account used for
+the operation. Use host access logs to attribute the action to an individual.
+The entries contain no passwords or password hashes and require database access
+to inspect. They are stored in the same database as the workspace.
+
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 
 

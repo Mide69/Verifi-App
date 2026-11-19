@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { mkdirSync, chmodSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { userInfo } from 'node:os'
 
 const id = () => randomBytes(16).toString('hex')
 const hash = value => createHash('sha256').update(value).digest('hex')
@@ -42,6 +43,10 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     );
     CREATE TABLE IF NOT EXISTS session (
       token TEXT PRIMARY KEY, account_id TEXT REFERENCES account(id) NOT NULL, expires INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS password_reset_audit (
+      id TEXT PRIMARY KEY, account_id TEXT REFERENCES account(id) NOT NULL,
+      host_user TEXT NOT NULL, created TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS batch (
       id TEXT PRIMARY KEY, issuer TEXT REFERENCES account(id) NOT NULL, product TEXT NOT NULL,
@@ -97,11 +102,13 @@ export function openLive(path = process.env.VERIFI_DB || './data/verifi.sqlite')
     validatePassword(password)
     const salt = id()
     const encrypted = digest(password,salt).toString('hex')
+    const hostUser = userInfo().username
     atomic(() => {
       const account = get('SELECT id FROM account WHERE email=?',address)
       if (!account) fail(404,'Account not found.')
       run('UPDATE account SET salt=?,password=? WHERE id=?',salt,encrypted,account.id)
       run('DELETE FROM session WHERE account_id=?',account.id)
+      run('INSERT INTO password_reset_audit VALUES (?,?,?,?)',id(),account.id,hostUser,new Date().toISOString())
     })
   }
 

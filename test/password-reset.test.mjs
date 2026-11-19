@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
@@ -45,6 +45,10 @@ for (const role of ['shopper','manufacturer','operator','regulator']) {
     const other = await login(oldPassword,'other@example.test')
     const db = new DatabaseSync(path)
     t.after(()=>db.close())
+    db.exec('DROP TABLE password_reset_audit')
+    live.close()
+    live = openLive(path)
+    assert.equal((await call('reports',undefined,first.cookie)).status,200)
     const accountId = db.prepare('SELECT id FROM account WHERE email=?').get(email).id
     db.prepare('INSERT INTO report (id,shopper,code,area,reason,created) VALUES (?,?,?,?,?,?)')
       .run('test-report',accountId,'VF-TEST','Test shop','Damaged seal','2026-11-01T00:00:00.000Z')
@@ -62,15 +66,32 @@ for (const role of ['shopper','manufacturer','operator','regulator']) {
       assert.equal((await call('reports',undefined,first.cookie)).status,200)
     }
     assert.equal(invoke('missing@example.test',newPassword).status,1)
+    assert.deepEqual(db.prepare('SELECT * FROM password_reset_audit').all(),[])
     db.exec(`CREATE TRIGGER block_session_delete BEFORE DELETE ON session
       BEGIN SELECT RAISE(ABORT,'simulated storage failure'); END`)
     assert.equal(invoke(email,newPassword).status,1)
     assert.deepEqual(db.prepare('SELECT * FROM account WHERE id=?').get(accountId),beforeAccount)
     assert.equal((await call('reports',undefined,first.cookie)).status,200)
+    assert.deepEqual(db.prepare('SELECT * FROM password_reset_audit').all(),[])
     db.exec('DROP TRIGGER block_session_delete')
+    db.exec(`CREATE TRIGGER block_reset_audit BEFORE INSERT ON password_reset_audit
+      BEGIN SELECT RAISE(ABORT,'simulated audit storage failure'); END`)
+    assert.equal(invoke(email,newPassword).status,1)
+    assert.deepEqual(db.prepare('SELECT * FROM account WHERE id=?').get(accountId),beforeAccount)
+    assert.equal((await call('reports',undefined,first.cookie)).status,200)
+    assert.equal((await call('reports',undefined,second.cookie)).status,200)
+    assert.deepEqual(db.prepare('SELECT * FROM password_reset_audit').all(),[])
+    db.exec('DROP TRIGGER block_reset_audit')
+    const startedAt = new Date().toISOString()
     const reset = invoke(email.toUpperCase(),newPassword+'\r\n')
     assert.equal(reset.status,0,reset.stderr)
     assert.doesNotMatch(reset.stdout+reset.stderr,new RegExp(newPassword))
+    const events = db.prepare('SELECT * FROM password_reset_audit').all()
+    assert.equal(events.length,1)
+    assert.equal(events[0].account_id,accountId)
+    assert.equal(events[0].host_user,userInfo().username)
+    assert.ok(events[0].created >= startedAt && events[0].created <= new Date().toISOString())
+    assert.deepEqual(Object.keys(events[0]).sort(),['account_id','created','host_user','id'])
     for (const cookie of [first.cookie,second.cookie]) {
       assert.equal((await call('session',undefined,cookie)).data.account,null)
       assert.equal((await call('reports',undefined,cookie)).status,401)
@@ -90,7 +111,13 @@ for (const role of ['shopper','manufacturer','operator','regulator']) {
     assert.deepEqual(db.prepare('SELECT * FROM audit').all(),beforeAudit)
     live.close()
     live = openLive(path)
+    assert.deepEqual(db.prepare('SELECT * FROM password_reset_audit').all(),events)
     assert.equal((await call('reports',undefined,first.cookie)).status,401)
     assert.equal((await login(newPassword)).status,200)
+    assert.equal(invoke(email,newPassword).status,0)
+    const subsequent = db.prepare('SELECT * FROM password_reset_audit ORDER BY rowid').all()
+    assert.equal(subsequent.length,2)
+    assert.deepEqual(subsequent[0],events[0])
+    assert.notEqual(subsequent[1].id,events[0].id)
   })
 }
