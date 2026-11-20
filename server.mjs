@@ -9,7 +9,17 @@ const args = process.argv.slice(2)
 const option = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback
 const assets = { '/demo': ['demo.html', 'text/html'], '/home.js': ['home.js', 'text/javascript'], '/home.css': ['home.css', 'text/css'], '/live': ['live.html', 'text/html'], '/live.js': ['live.js', 'text/javascript'], '/shopper.webp': ['shopper.webp', 'image/webp'], '/visuals.js': ['visuals.js', 'text/javascript'], '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/model.js': ['model.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] }
 createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost')
+  let url
+  try {
+    url = new URL(req.url, 'http://localhost')
+  } catch {
+    res.writeHead(400, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff'
+    }).end('Invalid request URL')
+    return
+  }
   if (url.pathname.startsWith('/api/')) return live.handle(req, res, url.pathname)
   if (url.pathname === '/qr') {
     const code = url.searchParams.get('code') || ''
