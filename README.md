@@ -44,6 +44,20 @@ Use the same working directory and `VERIFI_DB` setting for provisioning and serv
 This is a private pilot foundation. Before public deployment it needs verified email and recovery, MFA for privileged users, partner onboarding and revocation, backup and restore verification, abuse monitoring and a security review. If running a private pilot behind an HTTPS reverse proxy, set `VERIFI_ORIGIN` to the exact public origin and `VERIFI_SECURE_COOKIE=1`. Keep SQLite on a persistent volume and protect the database and its WAL files. Do not use real agency credentials or regulated records without an agreed pilot process.
 
 
+## Pilot handoff metrics
+
+From the Verifi host, use the same `VERIFI_DB` setting as the running service and run:
+
+```powershell
+node handoff-metrics.mjs 2026-11-01 2026-11-15
+```
+
+The command opens the database read-only and returns aggregate JSON. It counts reports submitted in the UTC date range, including the first date and excluding the end date. It also counts which of those reports were referred, acknowledged, or awaiting either step at the cutoff. The mean elapsed times use only cases that completed the measured step before the cutoff, and an empty sample returns `null`. Reassignments stay within the same referral, so referral-to-acknowledgement time starts at the first assignment.
+
+The `backlogReportsAwaitingReferral` and `backlogReferralsAwaitingAcknowledgement` fields include every report submitted before the cutoff, including older reports outside the chosen submission window. The `oldestReportAwaitingReferralSeconds` and `oldestReferralAwaitingAcknowledgementSeconds` fields measure the oldest outstanding wait at that cutoff. An empty backlog returns zero counts and `null` ages. Audit events at or after the cutoff are excluded even if the case has since progressed. These figures describe the database's recorded history and require a reliable service clock.
+
+An acknowledgement is an event inside Verifi. Track external receipts and case outcomes separately. Run this against a dedicated pilot database to avoid counting synthetic test records. The demo does not contribute to these metrics. Time-to-handoff figures cover completed steps, so compare them with the pending counts when reviewing delays.
+
 ## Public site and company onboarding
 
 Home (`/`) shows aggregate activity from the live database. Product checks are counted
