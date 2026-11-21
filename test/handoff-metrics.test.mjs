@@ -41,6 +41,7 @@ test('handoff metrics use the submission cohort and first transitions before the
     ['second',at('10.000'),'acknowledged'],
     ['third',at('20.000'),'referred'],
     ['old','2026-10-31T23:59:59.999Z','referred'],
+    ['old-pending','2026-10-31T12:00:00.000Z','submitted'],
     ['new',end,'submitted']
   ]) {
     report.run(id,'shopper','PRIVATE-PACK','Private shop','Private narrative',created,'NAFDAC',stage)
@@ -67,7 +68,10 @@ test('handoff metrics use the submission cohort and first transitions before the
     startInclusive:start,endExclusive:end,
     reportsSubmitted:3,reportsReferred:2,referralsAcknowledged:1,
     reportsAwaitingReferral:1,referralsAwaitingAcknowledgement:1,
-    meanSubmissionToReferralSeconds:2,meanReferralToAcknowledgementSeconds:3.25
+    meanSubmissionToReferralSeconds:2,meanReferralToAcknowledgementSeconds:3.25,
+    backlogReportsAwaitingReferral:2,backlogReferralsAwaitingAcknowledgement:2,
+    oldestReportAwaitingReferralSeconds:1252800,
+    oldestReferralAwaitingAcknowledgementSeconds:1209600
   })
   const {stdout:emptyOutput} = await invoke(path,'2026-10-01','2026-10-02')
   const empty = JSON.parse(emptyOutput)
@@ -76,6 +80,19 @@ test('handoff metrics use the submission cohort and first transitions before the
   assert.equal(empty.referralsAcknowledged,0)
   assert.equal(empty.meanSubmissionToReferralSeconds,null)
   assert.equal(empty.meanReferralToAcknowledgementSeconds,null)
+  assert.equal(empty.backlogReportsAwaitingReferral,0)
+  assert.equal(empty.backlogReferralsAwaitingAcknowledgement,0)
+  assert.equal(empty.oldestReportAwaitingReferralSeconds,null)
+  assert.equal(empty.oldestReferralAwaitingAcknowledgementSeconds,null)
+
+  const {stdout:olderOutput} = await invoke(path,'2026-11-14','2026-11-15')
+  const older = JSON.parse(olderOutput)
+  assert.equal(older.reportsSubmitted,0)
+  assert.equal(older.meanSubmissionToReferralSeconds,null)
+  assert.equal(older.backlogReportsAwaitingReferral,2)
+  assert.equal(older.backlogReferralsAwaitingAcknowledgement,2)
+  assert.equal(older.oldestReportAwaitingReferralSeconds,1252800)
+  assert.equal(older.oldestReferralAwaitingAcknowledgementSeconds,1209600)
 })
 
 test('handoff metrics reject invalid dates and never create a missing database', async t => {

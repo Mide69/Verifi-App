@@ -9,11 +9,11 @@ function utcDate(value) {
 
 function handoffMetrics(db, start, end) {
   return db.prepare(`
-    WITH report_cohort AS (
-      SELECT id, created FROM report WHERE created >= :start AND created < :end
+    WITH reports_at_cutoff AS (
+      SELECT id, created FROM report WHERE created < :end
     ), first_referral AS (
       SELECT r.id, r.created, MIN(a.created) AS referred_at
-      FROM report_cohort r LEFT JOIN audit a
+      FROM reports_at_cutoff r LEFT JOIN audit a
         ON a.report_id = r.id AND a.action = 'refer'
         AND a.created >= r.created AND a.created < :end
       GROUP BY r.id, r.created
@@ -25,15 +25,25 @@ function handoffMetrics(db, start, end) {
       GROUP BY r.id, r.created, r.referred_at
     )
     SELECT
-      COUNT(*) AS reportsSubmitted,
-      COUNT(referred_at) AS reportsReferred,
-      COUNT(acknowledged_at) AS referralsAcknowledged,
-      COUNT(*) - COUNT(referred_at) AS reportsAwaitingReferral,
-      COUNT(referred_at) - COUNT(acknowledged_at) AS referralsAwaitingAcknowledgement,
-      ROUND(AVG(unixepoch(referred_at, 'subsec') - unixepoch(created, 'subsec')), 3)
+      COUNT(*) FILTER (WHERE created >= :start) AS reportsSubmitted,
+      COUNT(referred_at) FILTER (WHERE created >= :start) AS reportsReferred,
+      COUNT(acknowledged_at) FILTER (WHERE created >= :start) AS referralsAcknowledged,
+      COUNT(*) FILTER (WHERE created >= :start AND referred_at IS NULL) AS reportsAwaitingReferral,
+      COUNT(*) FILTER (WHERE created >= :start AND referred_at IS NOT NULL AND acknowledged_at IS NULL)
+        AS referralsAwaitingAcknowledgement,
+      ROUND(AVG(unixepoch(referred_at, 'subsec') - unixepoch(created, 'subsec'))
+        FILTER (WHERE created >= :start), 3)
         AS meanSubmissionToReferralSeconds,
-      ROUND(AVG(unixepoch(acknowledged_at, 'subsec') - unixepoch(referred_at, 'subsec')), 3)
-        AS meanReferralToAcknowledgementSeconds
+      ROUND(AVG(unixepoch(acknowledged_at, 'subsec') - unixepoch(referred_at, 'subsec'))
+        FILTER (WHERE created >= :start), 3)
+        AS meanReferralToAcknowledgementSeconds,
+      COUNT(*) FILTER (WHERE referred_at IS NULL) AS backlogReportsAwaitingReferral,
+      COUNT(*) FILTER (WHERE referred_at IS NOT NULL AND acknowledged_at IS NULL)
+        AS backlogReferralsAwaitingAcknowledgement,
+      ROUND(MAX(unixepoch(:end, 'subsec') - unixepoch(created, 'subsec'))
+        FILTER (WHERE referred_at IS NULL), 3) AS oldestReportAwaitingReferralSeconds,
+      ROUND(MAX(unixepoch(:end, 'subsec') - unixepoch(referred_at, 'subsec'))
+        FILTER (WHERE acknowledged_at IS NULL), 3) AS oldestReferralAwaitingAcknowledgementSeconds
     FROM first_acknowledgement
   `).get({start,end})
 }
